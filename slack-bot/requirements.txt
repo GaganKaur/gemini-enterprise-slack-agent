@@ -1,0 +1,14 @@
+google-adk
+fastapi
+uvicorn[standard]
+google-cloud-discoveryengine
+python-dotenv
+requests
+slack_sdk
+google-auth
+flask
+slack_bolt
+google-auth-oauthlib
+
+
+

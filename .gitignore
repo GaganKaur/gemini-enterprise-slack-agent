@@ -1,0 +1,10 @@
+# Secrets - NEVER PUSH THESE
+.env
+client_secrets.json
+service_account_key.json
+credentials.json
+
+# Python
+venv/
+__pycache__/
+*.pyc
