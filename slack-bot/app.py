@@ -1,4 +1,5 @@
 import os
+import time
 import threading
 import asyncio
 import logging
@@ -109,12 +110,15 @@ def process_request(slack_user_id, user_text, say):
         say(blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": f"Hi <@{slack_user_id}>! Please login."}}, {"type": "actions", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Login with Google"}, "url": login_url, "style": "primary", "action_id": "login_btn"}]}], text="Please login.")
         return
 
-    say(f"Let me check that for you, <@{slack_user_id}>...")
+    # Start dynamic message and capture metadata
+    initial_resp = say("⚡ *Thinking...*")
+    message_ts = initial_resp["ts"]
+    channel_id = initial_resp["channel"]
 
     # Save to Global Cache
     tools.USER_CREDENTIAL_CACHE[slack_user_id] = user_creds
 
-    async def run_adk_workflow():
+    async def run_adk_workflow(channel, ts):
         print(f"DEBUG: [1] Starting Workflow for {slack_user_id}")
         session_id = f"slack-{slack_user_id}"
         
@@ -148,36 +152,69 @@ def process_request(slack_user_id, user_text, say):
         response_text = ""
         
         print(f"DEBUG: [4] Starting Runner Loop...")
+        last_update_time = 0.0
+        update_interval = 0.8  # seconds
+        called_tools = set()
+
         try:
             async for adk_event in runner.run_async(user_id=slack_user_id, session_id=session_id, new_message=new_message):
-                # print(f"DEBUG: [EVENT] Received Event Type: {type(adk_event)}") # Commented out to reduce noise
-                
-                # Check what content we got
                 if adk_event.content:
-                    # print(f"DEBUG: [CONTENT] Role: {adk_event.content.role}")
                     if adk_event.content.role == "model":
                         for part in adk_event.content.parts:
+                            updated = False
                             if part.text: 
                                 response_text += part.text
+                                updated = True
+                            
                             if part.function_call:
-                                print(f"DEBUG: [TOOL] Model is calling tool: {part.function_call.name}")
+                                tool_name = part.function_call.name
+                                if tool_name not in called_tools:
+                                    called_tools.add(tool_name)
+                                    tool_display_name = "Knowledge Base" if tool_name == "call_agentspace_search_api" else tool_name
+                                    response_text += f"\n\n🔍 *Searching {tool_display_name}...*"
+                                    updated = True
+                            
+                            if updated:
+                                now = time.time()
+                                if now - last_update_time >= update_interval:
+                                    try:
+                                        slack_app.client.chat_update(
+                                            channel=channel,
+                                            ts=ts,
+                                            text=response_text + " █"
+                                        )
+                                        last_update_time = now
+                                    except Exception as e:
+                                        print(f"DEBUG: [WARN] chat_update failed: {e}")
         except Exception as inner_e:
             print(f"DEBUG: [ERROR] Runner crashed: {inner_e}")
             raise inner_e
+
+        # Final update to clean up and remove cursor
+        try:
+            slack_app.client.chat_update(
+                channel=channel,
+                ts=ts,
+                text=response_text if response_text else "I processed the request, but the agent returned no text."
+            )
+        except Exception as e:
+            print(f"DEBUG: [WARN] final chat_update failed: {e}")
 
         print(f"DEBUG: [5] Finished Loop. Response length: {len(response_text)}")
         return response_text
 
     try:
-        final_answer = asyncio.run(run_adk_workflow())
-        if final_answer:
-            say(final_answer)
-        else:
-            print("DEBUG: [WARN] No text response generated.")
-            say("I processed the request, but the agent returned no text. Check terminal logs.")
+        asyncio.run(run_adk_workflow(channel_id, message_ts))
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
-        say(f"I encountered an error: {e}")
+        try:
+            slack_app.client.chat_update(
+                channel=channel_id,
+                ts=message_ts,
+                text=f"❌ *I encountered an error:* {e}"
+            )
+        except Exception as update_err:
+            print(f"DEBUG: Failed to update error status in Slack: {update_err}")
 
 # --- LISTENERS ---
 @slack_app.action(re.compile(".*"))
