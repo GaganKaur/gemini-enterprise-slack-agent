@@ -22,14 +22,21 @@ def get_credentials():
 
 def get_stats(data_list):
     if not data_list:
-        return None, None, None, None
+        return None, None, None, None, None, None, None
     s_min = min(data_list)
     s_max = max(data_list)
     s_avg = sum(data_list) / len(data_list)
     sorted_data = sorted(data_list)
-    idx = int(len(sorted_data) * 0.90)
-    s_p90 = sorted_data[min(idx, len(sorted_data) - 1)]
-    return s_min, s_max, s_avg, s_p90
+    
+    def get_percentile(p):
+        idx = int(len(sorted_data) * p)
+        return sorted_data[min(idx, len(sorted_data) - 1)]
+        
+    s_p50 = get_percentile(0.50)
+    s_p90 = get_percentile(0.90)
+    s_p95 = get_percentile(0.95)
+    s_p99 = get_percentile(0.99)
+    return s_min, s_p50, s_p90, s_p95, s_p99, s_max, s_avg
 
 async def run_async_stream_test(client, credentials, project_id, engine_id, scenario, query_text):
     base_url = "https://discoveryengine.googleapis.com/v1alpha"
@@ -542,6 +549,7 @@ async def main_async(manifest_path, cdp_url=None):
             
         print(f"Resolved base agent URL: {base_url}")
         
+        total_start_time = time.time()
         async with httpx.AsyncClient(timeout=120.0) as client:
             results = {}
             for s in scenarios:
@@ -553,12 +561,20 @@ async def main_async(manifest_path, cdp_url=None):
                 ]
                 scenario_results = await asyncio.gather(*tasks)
                 results[s_name] = scenario_results
+        total_end_time = time.time()
+        total_duration_s = total_end_time - total_start_time
+        duration_minutes = total_duration_s / 60.0
+        total_queries = len(scenarios) * iterations
+        throughput_qpm = total_queries / duration_minutes if duration_minutes > 0 else 0.0
                 
     # Build report output structures
     results_json = {
         "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "test_id": test_id,
         "manifest_used": manifest_path,
+        "concurrency_limit": max_concurrency,
+        "total_duration_seconds": total_duration_s,
+        "queries_per_minute": throughput_qpm,
         "scenarios": {}
     }
     
@@ -585,15 +601,34 @@ async def main_async(manifest_path, cdp_url=None):
                     speed_list.append(r["generation_speed"])
                     
         # Compute Stats
-        ttft_min, ttft_max, ttft_avg, ttft_p90 = get_stats(ttft_list)
-        ttlt_min, ttlt_max, ttlt_avg, ttlt_p90 = get_stats(ttlt_list)
-        speed_min, speed_max, speed_avg, speed_p90 = get_stats(speed_list)
+        ttft_min, ttft_p50, ttft_p90, ttft_p95, ttft_p99, ttft_max, ttft_avg = get_stats(ttft_list)
+        ttlt_min, ttlt_p50, ttlt_p90, ttlt_p95, ttlt_p99, ttlt_max, ttlt_avg = get_stats(ttlt_list)
+        speed_min, speed_p50, speed_p90, speed_p95, speed_p99, speed_max, speed_avg = get_stats(speed_list)
         success_rate = (success_count / len(runs)) * 100.0 if runs else 0.0
         
         results_json["scenarios"][s_name] = {
+            "complexity_level": s.get("complexity_level", "Unknown"),
             "aggregated_stats": {
+                "ttft_min_s": ttft_min,
+                "ttft_p50_s": ttft_p50,
+                "ttft_p90_s": ttft_p90,
+                "ttft_p95_s": ttft_p95,
+                "ttft_p99_s": ttft_p99,
+                "ttft_max_s": ttft_max,
                 "ttft_avg_s": ttft_avg,
+                "ttlt_min_s": ttlt_min,
+                "ttlt_p50_s": ttlt_p50,
+                "ttlt_p90_s": ttlt_p90,
+                "ttlt_p95_s": ttlt_p95,
+                "ttlt_p99_s": ttlt_p99,
+                "ttlt_max_s": ttlt_max,
                 "ttlt_avg_s": ttlt_avg,
+                "generation_speed_min_chars_sec": speed_min,
+                "generation_speed_p50_chars_sec": speed_p50,
+                "generation_speed_p90_chars_sec": speed_p90,
+                "generation_speed_p95_chars_sec": speed_p95,
+                "generation_speed_p99_chars_sec": speed_p99,
+                "generation_speed_max_chars_sec": speed_max,
                 "generation_speed_chars_per_sec_avg": speed_avg,
                 "success_rate_percent": success_rate
             },
@@ -615,6 +650,10 @@ async def main_async(manifest_path, cdp_url=None):
     # Now, build report.md structure
     report_md = f"# Latency Audit Report: Test Run {test_id}\n"
     report_md += f"Executed at: `{results_json['timestamp']}` using manifest: `{manifest_path}`\n\n"
+    report_md += f"## ⚙️ Run Execution Metadata\n"
+    report_md += f"*   **Concurrency Limit**: `{max_concurrency}` simultaneous workers\n"
+    report_md += f"*   **Total Duration**: `{total_duration_s:.1f} seconds` ({duration_minutes:.2f} minutes)\n"
+    report_md += f"*   **Average Throughput**: `{throughput_qpm:.2f} queries per minute` (Volume tracking)\n\n"
     
     if "combined" in chart_links:
         report_md += "## 📊 Unified Latency Comparison (TTFT vs. TTLT)\n"
@@ -624,8 +663,10 @@ async def main_async(manifest_path, cdp_url=None):
     for s in scenarios:
         s_name = s["name"]
         runs = results[s_name]
+        complexity = s.get("complexity_level", "Unknown")
         
         report_md += f"## Scenario: {s_name}\n"
+        report_md += f"*   **Complexity Profile**: `{complexity}`\n\n"
         report_md += "| Run ID | API Used | status_code | TTFT (s) | TTLT (s) | Speed (char/s) | Trace & Screenshot |\n"
         report_md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
         
@@ -654,18 +695,18 @@ async def main_async(manifest_path, cdp_url=None):
         ttlt_list = [r["ttlt"] for r in runs_data if not r.get("error") and r.get("ttlt") is not None]
         speed_list = [r["generation_speed"] for r in runs_data if not r.get("error") and r.get("generation_speed", 0) > 0]
         
-        ttft_min, ttft_max, ttft_avg, ttft_p90 = get_stats(ttft_list)
-        ttlt_min, ttlt_max, ttlt_avg, ttlt_p90 = get_stats(ttlt_list)
-        speed_min, speed_max, speed_avg, speed_p90 = get_stats(speed_list)
+        ttft_min, ttft_p50, ttft_p90, ttft_p95, ttft_p99, ttft_max, ttft_avg = get_stats(ttft_list)
+        ttlt_min, ttlt_p50, ttlt_p90, ttlt_p95, ttlt_p99, ttlt_max, ttlt_avg = get_stats(ttlt_list)
+        speed_min, speed_p50, speed_p90, speed_p95, speed_p99, speed_max, speed_avg = get_stats(speed_list)
         
         def fmt(val, unit="s"):
             return f"{val:.3f} {unit}" if val is not None else "N/A"
             
         report_md += f"\n**Statistics for {s_name}:**\n"
         report_md += f"* **Success Rate**: {s_stats['success_rate_percent']:.1f}%\n"
-        report_md += f"* **TTFT**: Min = {fmt(ttft_min)}, Max = {fmt(ttft_max)}, Avg = {fmt(ttft_avg)}, P90 = {fmt(ttft_p90)}\n"
-        report_md += f"* **TTLT**: Min = {fmt(ttlt_min)}, Max = {fmt(ttlt_max)}, Avg = {fmt(ttlt_avg)}, P90 = {fmt(ttlt_p90)}\n"
-        report_md += f"* **Speed**: Min = {fmt(speed_min, 'char/s')}, Max = {fmt(speed_max, 'char/s')}, Avg = {fmt(speed_avg, 'char/s')}, P90 = {fmt(speed_p90, 'char/s')}\n\n"
+        report_md += f"* **TTFT**: Min = {fmt(ttft_min)}, P50 = {fmt(ttft_p50)}, P90 = {fmt(ttft_p90)}, P95 = {fmt(ttft_p95)}, P99 = {fmt(ttft_p99)}, Max = {fmt(ttft_max)}, Avg = {fmt(ttft_avg)}\n"
+        report_md += f"* **TTLT**: Min = {fmt(ttlt_min)}, P50 = {fmt(ttlt_p50)}, P90 = {fmt(ttlt_p90)}, P95 = {fmt(ttlt_p95)}, P99 = {fmt(ttlt_p99)}, Max = {fmt(ttlt_max)}, Avg = {fmt(ttlt_avg)}\n"
+        report_md += f"* **Speed**: Min = {fmt(speed_min, 'char/s')}, P50 = {fmt(speed_p50, 'char/s')}, P90 = {fmt(speed_p90, 'char/s')}, P95 = {fmt(speed_p95, 'char/s')}, P99 = {fmt(speed_p99, 'char/s')}, Max = {fmt(speed_max, 'char/s')}, Avg = {fmt(speed_avg, 'char/s')}\n\n"
         
         # Append visual charts if generated
         if s_name in chart_links:
