@@ -74,11 +74,11 @@ Averages computed over 10 consecutive successful runs (seconds).
 | **Q9. 3-Way IT Checklist** | 3 | **8.092** | 31.543 | **42.249** | 35.938 | streamAssist API starts 3.8x faster; UI ends 6.3s faster |
 
 ### 📈 Unified Latency Comparison (TTFT vs. TTLT)
-![Unified Latency Comparison](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/combined_latency_comparison.png)
+![Unified Latency Comparison](assets/run_002_multi_query/charts/combined_latency_comparison.png)
 
 ### 📈 Latency Overhead Scaling Summary
-![Latency Scaling Across Connectors](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/latency_scaling.png)
-_source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/latency_scaling.dot) | [latency_scaling.png](file:///usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/latency_scaling.png)_
+![Latency Scaling Across Connectors](assets/latency_scaling.png)
+_source: [latency_scaling.dot](assets/latency_scaling.dot) | [latency_scaling.png](assets/latency_scaling.png)_
 
 ---
 
@@ -89,18 +89,18 @@ _source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemi
 #### Latency Timelines (n=10)
 
 ##### Programmatic streamAssist (Q8 streamAssist API)
-![Q8 Stream runs](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_stream_runs.png)
+![Q8 Stream runs](assets/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_stream_runs.png)
 
 ##### Web App UI Chat (Q8 UI)
-![Q8 UI runs](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_ui_runs.png)
+![Q8 UI runs](assets/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_ui_runs.png)
 
 #### Latency Bin Distributions (5s Bins)
 
 ##### Programmatic streamAssist (Q8 streamAssist API)
-![Q8 Stream Histogram](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_stream_histogram.png)
+![Q8 Stream Histogram](assets/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_stream_histogram.png)
 
 ##### Web App UI Chat (Q8 UI)
-![Q8 UI Histogram](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_ui_histogram.png)
+![Q8 UI Histogram](assets/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_ui_histogram.png)
 
 ---
 
@@ -109,27 +109,27 @@ _source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemi
 #### Latency Timelines (n=10)
 
 ##### Programmatic streamAssist (Q9 streamAssist API)
-![Q9 Stream runs](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q9_3_way_it_checklist_stream_runs.png)
+![Q9 Stream runs](assets/run_002_multi_query/charts/q9_3_way_it_checklist_stream_runs.png)
 
 ##### Web App UI Chat (Q9 UI)
-![Q9 UI runs](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q9_3_way_it_checklist_ui_runs.png)
+![Q9 UI runs](assets/run_002_multi_query/charts/q9_3_way_it_checklist_ui_runs.png)
 
 #### Latency Bin Distributions (5s Bins)
 
 ##### Programmatic streamAssist (Q9 streamAssist API)
-![Q9 Stream Histogram](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q9_3_way_it_checklist_stream_histogram.png)
+![Q9 Stream Histogram](assets/run_002_multi_query/charts/q9_3_way_it_checklist_stream_histogram.png)
 
 ##### Web App UI Chat (Q9 UI)
-![Q9 UI Histogram](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q9_3_way_it_checklist_ui_histogram.png)
+![Q9 UI Histogram](assets/run_002_multi_query/charts/q9_3_way_it_checklist_ui_histogram.png)
 
 ---
 
 ## 7. Audit Artifacts & References
 All execution outputs, logs, code controllers, and telemetry database files are preserved in the local workspace:
 
-*   **Master Telemetry Database**: [results.json](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/reproduction_kit/runs/run_20260617_165559_002/results.json)
-*   **Comprehensive Run Report**: [report.md](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/reproduction_kit/runs/run_20260617_165559_002/report.md)
-*   **Execution Logs**: [task-4221.log](file:///usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/.system_generated/tasks/task-4221.log)
-*   **Consolidated Page Object Model**: [browser_controller.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/reproduction_kit/browser_controller.py)
-*   **Diagnostic DOM Scrapes**: [extracted_texts.json](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/scratch/extracted_texts.json)
-*   **Visual Validation Capture**: [debug_page_25s.png](file:///usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/debug_page_25s.png)
+*   **Master Telemetry Database**: [results.json](assets/run_002_multi_query/results.json)
+*   **Comprehensive Run Report**: [report.md](assets/run_002_multi_query/report.md)
+*   **Execution Logs**: [task-4221.log](assets/run_002_multi_query/task-4221.log)
+*   **Consolidated Page Object Model**: [browser_controller.py](../src/browser_controller.py)
+*   **Diagnostic DOM Scrapes**: [extracted_texts.json](assets/run_002_multi_query/extracted_texts.json)
+*   **Visual Validation Capture**: [debug_page_25s.png](assets/run_002_multi_query/debug_page_25s.png)

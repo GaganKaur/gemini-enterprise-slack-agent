@@ -1,0 +1,48 @@
+digraph G {
+    rankdir=TB;
+    fontname="Inter,Arial";
+    fontsize=12;
+    labeljust="l";
+    compound=true;
+    nodesep=0.4;
+    ranksep=0.5;
+    
+    node [shape=box, style="filled,rounded", fontname="Inter,Arial", fontsize=11, color="#dadce0", fillcolor="#ffffff", fontcolor="#3c4043", width=2.2, height=0.6];
+    edge [color="#bdc1c6", penwidth=1.5, arrowhead=none];
+    
+    subgraph cluster_1 {
+        label="1 Active Connector (Avg: 20.1s)";
+        style="filled,dashed";
+        color="#1a73e8";
+        fillcolor="#e8f0fe";
+        
+        q1 [label="GDrive Lookup\nAvg TTLT: 19.3s", fillcolor="#ffffff", color="#1a73e8", fontcolor="#1a73e8"];
+        q2 [label="Confluence Lookup\nAvg TTLT: 23.8s", fillcolor="#ffffff", color="#1a73e8", fontcolor="#1a73e8"];
+        q3 [label="Jira Lookup\nAvg TTLT: 18.0s", fillcolor="#ffffff", color="#1a73e8", fontcolor="#1a73e8"];
+        q4 [label="LumApps GCS\nAvg TTLT: 19.4s", fillcolor="#ffffff", color="#1a73e8", fontcolor="#1a73e8"];
+    }
+    
+    subgraph cluster_2 {
+        label="2 Active Connectors (Avg: 30.6s)";
+        style="filled,dashed";
+        color="#f9ab00";
+        fillcolor="#fef7e0";
+        
+        q5 [label="Conf + Jira\nAvg TTLT: 28.8s", fillcolor="#ffffff", color="#f9ab00", fontcolor="#b06000"];
+        q6 [label="GDrive + Conf\nAvg TTLT: 35.8s", fillcolor="#ffffff", color="#f9ab00", fontcolor="#b06000"];
+        q7 [label="LumApps + Jira\nAvg TTLT: 27.3s", fillcolor="#ffffff", color="#f9ab00", fontcolor="#b06000"];
+    }
+    
+    subgraph cluster_3 {
+        label="3 Active Connectors (Avg: 40.2s)";
+        style="filled,dashed";
+        color="#d93025";
+        fillcolor="#fce8e6";
+        
+        q8 [label="GDrive + Conf + Jira\nAvg TTLT: 38.1s", fillcolor="#ffffff", color="#d93025", fontcolor="#a50203"];
+        q9 [label="3-Way IT Checklist\nAvg TTLT: 42.2s", fillcolor="#ffffff", color="#d93025", fontcolor="#a50203"];
+    }
+    
+    q4 -> q7 [style=invis];
+    q7 -> q8 [style=invis];
+}
