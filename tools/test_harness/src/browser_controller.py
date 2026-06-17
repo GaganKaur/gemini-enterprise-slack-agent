@@ -4,9 +4,9 @@ import time
 from playwright.async_api import Page, BrowserContext
 
 class GeminiEnterpriseController:
-    def __init__(self, context: BrowserContext, customer_id: str):
+    def __init__(self, context: BrowserContext, config_id: str):
         self.context = context
-        self.cid = customer_id
+        self.cid = config_id
         self.page: Page = None
         self.last_trace_id = None
         

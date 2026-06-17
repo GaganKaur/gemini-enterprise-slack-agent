@@ -63,7 +63,6 @@ The harness is configured using a JSON manifest file located at `manifests/manif
 ```json
 {
   "project_id": "corp-vertias-d",              // Your target Yahoo GCP Project
-  "customer_id": "c33a03fe-9fbc-4ce7-ad44-85195fbe5625", // Your Customer ID
   "engine_id": "yahoo_1780365163254",          // Vertex AI Search Engine ID
   "iterations": 10,                            // Sample size per scenario (n=10)
   "concurrency_limit": 3,                      // Max concurrent workers

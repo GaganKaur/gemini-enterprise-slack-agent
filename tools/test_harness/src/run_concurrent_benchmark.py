@@ -533,12 +533,12 @@ async def main_async(manifest_path, cdp_url=None):
                 await asyncio.sleep(1)
                 
             if not cid:
-                print("ERROR: Authentication timed out or Customer ID not detected. Exiting.")
+                print("ERROR: Authentication timed out or Configuration ID not detected. Exiting.")
                 await browser.close()
                 return
                 
             base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
-            print(f"Authentication successful! Detected Customer ID: {cid}")
+            print(f"Authentication successful! Detected Configuration ID: {cid}")
             
         print(f"Resolved base agent URL: {base_url}")
         
