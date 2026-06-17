@@ -12,12 +12,25 @@ It enables automated, head-to-head performance evaluations of:
 
 Before running the benchmarks, complete these steps on your development workstation:
 
-### A. Authenticate Google Cloud CLI
-Ensure you have authorized ambient credentials to make authenticated API requests to your GCP project:
-```bash
-gcloud auth login
-gcloud auth application-default login
-```
+### A. Authenticate Google Cloud CLI (Matching Profile)
+Ensure your active `gcloud` profile and Google Cloud credentials match the target GCP environment:
+1. Check your currently active `gcloud` account and project:
+   ```bash
+   gcloud config list
+   ```
+2. If the active account or project does not match your target environment, switch them:
+   ```bash
+   gcloud config set account <your-corp-email>
+   gcloud config set project corp-vertias-d
+   ```
+3. Authorize Google Application Default Credentials (ADC) for the Python client library:
+   ```bash
+   gcloud auth application-default login
+   ```
+
+> [!IMPORTANT]
+> **Account Alignment Constraint**  
+> The Google account authorized in your terminal must **exactly match** the account you use to log in to the Google Cloud Console (Vertex AI Search) in Chrome. Discrepancies between your CLI authentication and your browser session will lead to benchmark execution failures.
 
 ### B. Install Python & Dependency Manager (`uv`)
 We use `uv` to automatically bootstrap isolated virtual environments and pin package dependencies:
@@ -27,12 +40,19 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env
 ```
 
-### C. Launch Chrome with Remote Debugging Active
-The Web App UI test requires a running Chrome browser context with remote debugging activated on port `9222`:
-```bash
-# gLinux / Linux
-google-chrome --remote-debugging-port=9222
-```
+### C. Browser Environment (Chrome Profile Selection)
+The UI benchmark runs locally by launching an interactive Chrome window.
+1. **Interactive Login Mode (Default)**:  
+   When you start the benchmark runner, it will automatically launch a new Chrome browser window and navigate to the Vertex AI Search console.
+   * You **must** log in using the same account configured in Step A (`<your-corp-email>`).
+   * If you have multiple Chrome profiles, ensure you are signing in to the profile associated with that email.
+2. **CDP Option (Optional / Headless VMs)**:  
+   If you are running the test harness on a remote VM, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port:
+   ```bash
+   # Start Chrome with remote debugging active (e.g. on macOS)
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+   ```
+   *Note: If Chrome is already open, make sure you launch this debugging session under the Chrome profile containing your active Google Cloud Console credentials.*
 
 ---
 
@@ -61,14 +81,19 @@ The harness is configured using a JSON manifest file located at `manifests/manif
 
 ## 🚀 3. Executing the Test Harness
 
-Run the benchmark runner script using `uv` to run isolated execution with all dependencies loaded:
+Run the benchmark runner script using `uv` to trigger isolated execution:
 
 ```bash
 # Navigate to the test_harness directory
 cd tools/test_harness
 
-# Execute the concurrent benchmark
+# Option A: Execute in interactive mode (opens a browser window for login)
 PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/manifest_multi_query_template.json
+
+# Option B: Execute connecting to an already running Chrome (on port 9222)
+PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
+  --manifest=manifests/manifest_multi_query_template.json \
+  --cdp-url=http://localhost:9222
 ```
 
 ---

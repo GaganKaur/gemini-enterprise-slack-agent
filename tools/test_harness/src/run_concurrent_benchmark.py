@@ -14,10 +14,7 @@ from playwright.async_api import async_playwright
 
 def get_credentials():
     credentials, project = google.auth.default(
-        scopes=[
-            "https://www.googleapis.com/auth/cloud-platform",
-            "https://www.googleapis.com/auth/drive"
-        ]
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
     if not credentials.valid:
         credentials.refresh(Request())
@@ -468,7 +465,7 @@ async def worker(semaphore, context, base_url, client, credentials, project_id, 
         res["skipping_mode"] = "REQUEST_ASSIST" if "REQUEST_ASSIST" in str(scenario) else "UNSPECIFIED"
         return res
 
-async def main_async(manifest_path):
+async def main_async(manifest_path, cdp_url=None):
     print(f"Loading configuration manifest: {manifest_path}")
     with open(manifest_path, "r") as f:
         config = json.load(f)
@@ -492,25 +489,56 @@ async def main_async(manifest_path):
     
     semaphore = asyncio.Semaphore(max_concurrency)
     
-    print("Connecting Playwright to active browser context...")
+    print("Initializing Playwright browser context...")
     async with async_playwright() as p:
-        browser = await p.chromium.connect_over_cdp("http://localhost:9222")
-        context = browser.contexts[0]
-        
-        # Resolve Base URL
-        base_url = None
-        for pg in context.pages:
-            if "vertexaisearch.cloud.google.com" in pg.url:
-                url = pg.url
+        if cdp_url:
+            print(f"Connecting to remote browser over CDP: {cdp_url}")
+            browser = await p.chromium.connect_over_cdp(cdp_url)
+            context = browser.contexts[0]
+            
+            # Resolve Base URL from open pages
+            base_url = None
+            for pg in context.pages:
+                if "vertexaisearch.cloud.google.com" in pg.url:
+                    url = pg.url
+                    match = re.search(r"/cid/([^/?#]+)", url)
+                    if match:
+                        cid = match.group(1)
+                        base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
+                        break
+            if not base_url:
+                print("ERROR: Active Vertex AI Search page tab not found over CDP. Make sure Chrome with remote debugging is running.")
+                return
+        else:
+            print("Launching new interactive browser instance...")
+            # Launch local Chrome / Chromium headfully
+            browser = await p.chromium.launch(headless=False)
+            context = await browser.new_context()
+            page = await context.new_page()
+            
+            print("Navigating to Vertex AI Search Console...")
+            await page.goto("https://vertexaisearch.cloud.google.com/home")
+            
+            print("\n>>> Please complete your sign-in to the Vertex AI Search console in the opened browser window...")
+            
+            cid = None
+            start_auth_time = time.time()
+            # Poll for Customer ID in the URL for up to 120s
+            while time.time() - start_auth_time < 120:
+                url = page.url
                 match = re.search(r"/cid/([^/?#]+)", url)
                 if match:
                     cid = match.group(1)
-                    base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
                     break
-        
-        if not base_url:
-            print("ERROR: Active Vertex AI Search page tab not found. Launch Chrome with debug port 9222 first.")
-            return
+                await asyncio.sleep(1)
+                
+            if not cid:
+                print("ERROR: Authentication timed out or Customer ID not detected. Exiting.")
+                await browser.close()
+                return
+                
+            base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
+            print(f"Authentication successful! Detected Customer ID: {cid}")
             
         print(f"Resolved base agent URL: {base_url}")
         
@@ -680,8 +708,13 @@ def main():
         default="manifests/manifest_multi_query_template.json",
         help="Path to the JSON configuration manifest"
     )
+    parser.add_argument(
+        "--cdp-url",
+        default=None,
+        help="Optional Chrome DevTools Protocol URL (e.g. http://localhost:9222) to reuse existing session"
+    )
     args = parser.parse_args()
-    asyncio.run(main_async(args.manifest))
+    asyncio.run(main_async(args.manifest, args.cdp_url))
 
 if __name__ == '__main__':
     main()
