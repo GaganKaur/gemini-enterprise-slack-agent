@@ -18,7 +18,7 @@ All relevant code and configurations have been consolidated inside `tools/test_h
 1.  **[src/run_concurrent_benchmark.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/src/run_concurrent_benchmark.py)**: The main test runner script. Authenticates API calls via Google Application Default Credentials (ADC) and coordinates concurrent runs (Sync API, Stream API, and Browser UI).
 2.  **[src/browser_controller.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/src/browser_controller.py)**: Playwright page controller that automates query inputs into the ProseMirror editor and extracts TTFT/TTLT metrics.
 3.  **[src/chart_generator.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/src/chart_generator.py)**: Script that reads execution `results.json` and renders Matplotlib charts.
-4.  **[manifests/verify_manifest.json](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/manifests/verify_manifest.json)**: Minimal manifest template for smoke testing.
+4.  **[manifests/thomas_test_environment/verify_manifest.json](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/manifests/thomas_test_environment/verify_manifest.json)**: Minimal manifest for smoke testing in Thomas's environment.
 5.  **[README.md](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/README.md)**: Setup and guide for running the harness.
 
 ---
@@ -61,6 +61,6 @@ This aligns authentication with standard developer ADC configuration.
 ### Step 4: Verification
 Verify local execution by running:
 ```bash
-PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/verify_manifest.json
+PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/thomas_test_environment/verify_manifest.json
 ```
 Ensure that the browser opens, waits for authentication, and correctly executes the suite.
