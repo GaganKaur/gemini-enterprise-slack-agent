@@ -1,9 +1,9 @@
 {
   "manifest_version": "1.0.0",
   "test_id": "verify",
-  "description": "Verification query benchmark",
-  "project_id": "genai-alpha-422116",
-  "engine_id": "yahoo_1780365163254",
+  "description": "Verification query benchmark - Yahoo Environment",
+  "project_id": "corp-veritas-d",
+  "engine_id": "<YAHOO_VERTEX_SEARCH_ENGINE_ID>",
   "query": "what is the company PTO policy?",
   "iterations": 1,
   "max_concurrent_calls": 1,
