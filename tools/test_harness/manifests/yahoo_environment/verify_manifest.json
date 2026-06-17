@@ -15,17 +15,23 @@
       "payload": {
         "assistSkippingMode": "REQUEST_ASSIST",
         "agentsSpec": {
-          "agentSpecs": [{"agentId": "core_assistant"}]
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
         },
         "toolsSpec": {
           "vertexAiSearchSpec": {}
         }
-      }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
     },
     {
       "name": "Q1. GDrive - PTO Rollover (UI)",
       "api": "ui",
-      "query": "What is the company policy for rollover of unused PTO days?"
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "complexity_level": "Level 2: Single-Connector RAG"
     }
   ]
 }
