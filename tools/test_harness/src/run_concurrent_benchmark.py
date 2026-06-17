@@ -1,0 +1,687 @@
+import asyncio
+import json
+import time
+import uuid
+import httpx
+import google.auth
+import os
+import datetime
+import argparse
+import traceback
+import re
+from google.auth.transport.requests import Request
+from playwright.async_api import async_playwright
+
+def get_credentials():
+    credentials, project = google.auth.default(
+        scopes=[
+            "https://www.googleapis.com/auth/cloud-platform",
+            "https://www.googleapis.com/auth/drive"
+        ]
+    )
+    if not credentials.valid:
+        credentials.refresh(Request())
+    return credentials
+
+def get_stats(data_list):
+    if not data_list:
+        return None, None, None, None
+    s_min = min(data_list)
+    s_max = max(data_list)
+    s_avg = sum(data_list) / len(data_list)
+    sorted_data = sorted(data_list)
+    idx = int(len(sorted_data) * 0.90)
+    s_p90 = sorted_data[min(idx, len(sorted_data) - 1)]
+    return s_min, s_max, s_avg, s_p90
+
+async def run_async_stream_test(client, credentials, project_id, engine_id, scenario, query_text):
+    base_url = "https://discoveryengine.googleapis.com/v1alpha"
+    url = f"{base_url}/projects/{project_id}/locations/global/collections/default_collection/engines/{engine_id}/assistants/default_assistant:streamAssist"
+    
+    trace_id = uuid.uuid4().hex
+    headers = {
+        "Authorization": f"Bearer {credentials.token}",
+        "Content-Type": "application/json",
+        "X-Goog-User-Project": project_id,
+        "x-cloud-trace-context": f"{trace_id}/0;o=1"
+    }
+    payload = {
+        "query": {"text": query_text},
+        "session": f"projects/{project_id}/locations/global/collections/default_collection/engines/{engine_id}/sessions/-",
+    }
+    if "payload" in scenario:
+        payload.update(scenario["payload"])
+        if "agentsSpec" not in payload:
+            target_agent_id = scenario.get("agent_id", "core_assistant")
+            payload["agentsSpec"] = {
+                "agentSpecs": [{"agentId": target_agent_id}]
+            }
+    else:
+        # Fallback to defaults
+        target_agent_id = scenario.get("agent_id", "core_assistant")
+        payload["agentsSpec"] = {
+            "agentSpecs": [
+                {
+                    "agentId": target_agent_id
+                }
+            ]
+        }
+        payload["toolsSpec"] = {
+            "vertexAiSearchSpec": {}
+        }
+        if scenario.get("skip_classifier", True):
+            payload["assistSkippingMode"] = "REQUEST_ASSIST"
+        
+    start_time = time.time()
+    ttft = None
+    response_text = ""
+    status_code = None
+    
+    try:
+        async with client.stream("POST", url, json=payload, headers=headers) as response:
+            status_code = response.status_code
+            if response.status_code != 200:
+                body = await response.aread()
+                return {
+                    "status_code": response.status_code,
+                    "error": f"Status {response.status_code}: {body.decode('utf-8')}",
+                    "ttft": None,
+                    "ttlt": time.time() - start_time,
+                    "response_text": "",
+                    "generation_speed": 0.0,
+                    "trace_id": trace_id
+                }
+                
+            buffer = ""
+            decoder = json.JSONDecoder()
+            async for chunk in response.aiter_text():
+                buffer += chunk
+                buffer = buffer.lstrip()
+                if buffer.startswith('['): buffer = buffer[1:].lstrip()
+                if buffer.startswith(','): buffer = buffer[1:].lstrip()
+                
+                while buffer:
+                    try:
+                        obj, index = decoder.raw_decode(buffer)
+                        buffer = buffer[index:].lstrip()
+                        if buffer.startswith(','): buffer = buffer[1:].lstrip()
+                        if buffer.startswith(']'): buffer = buffer[1:].lstrip()
+                        
+                        if ttft is None:
+                            ttft = time.time() - start_time
+                            
+                        # Extract stream text
+                        answer = obj.get("answer", {})
+                        replies = answer.get("replies", [])
+                        if replies:
+                            content = replies[0].get("groundedContent", {}).get("content", {})
+                            text = content.get("text", "")
+                            if text:
+                                if text.startswith(response_text):
+                                    response_text = text
+                                else:
+                                    response_text += text
+                    except json.JSONDecodeError:
+                        break
+                        
+        end_time = time.time() - start_time
+        generation_speed = len(response_text) / (end_time - ttft) if (ttft is not None and (end_time - ttft) > 0) else 0.0
+        return {
+            "status_code": status_code,
+            "ttft": ttft,
+            "ttlt": end_time,
+            "trace_id": trace_id,
+            "response_text": response_text,
+            "generation_speed": generation_speed,
+            "error": None
+        }
+    except Exception as e:
+        return {
+            "status_code": status_code or 500,
+            "error": str(e),
+            "ttft": None,
+            "ttlt": time.time() - start_time,
+            "response_text": "",
+            "generation_speed": 0.0,
+            "trace_id": trace_id
+        }
+
+async def run_async_sync_test(client, credentials, project_id, engine_id, scenario, query_text):
+    base_url = "https://discoveryengine.googleapis.com/v1alpha"
+    url = f"{base_url}/projects/{project_id}/locations/global/collections/default_collection/engines/{engine_id}/assistants/default_assistant:assist"
+    
+    trace_id = uuid.uuid4().hex
+    headers = {
+        "Authorization": f"Bearer {credentials.token}",
+        "Content-Type": "application/json",
+        "X-Goog-User-Project": project_id,
+        "x-cloud-trace-context": f"{trace_id}/0;o=1"
+    }
+    payload = {
+        "query": {"text": query_text},
+        "session": f"projects/{project_id}/locations/global/collections/default_collection/engines/{engine_id}/sessions/-"
+    }
+    if "payload" in scenario:
+        payload.update(scenario["payload"])
+    else:
+        # Fallback to defaults
+        if scenario.get("skip_classifier", True):
+            payload["assistSkippingMode"] = "REQUEST_ASSIST"
+        
+    start_time = time.time()
+    status_code = None
+    
+    try:
+        response = await client.post(url, json=payload, headers=headers)
+        status_code = response.status_code
+        end_time = time.time() - start_time
+        if response.status_code != 200:
+            return {
+                "status_code": response.status_code,
+                "error": f"Status {response.status_code}: {response.text}",
+                "ttft": None,
+                "ttlt": end_time,
+                "response_text": "",
+                "generation_speed": 0.0,
+                "trace_id": trace_id
+            }
+            
+        res_json = response.json()
+        answer = res_json.get("answer", {})
+        response_text = answer.get("answerText", "")
+        if not response_text:
+            replies = answer.get("replies", [])
+            if replies:
+                response_text = replies[0].get("groundedContent", {}).get("content", {}).get("text", "")
+                
+        generation_speed = len(response_text) / end_time if end_time > 0 else 0.0
+        return {
+            "status_code": response.status_code,
+            "ttft": None,
+            "ttlt": end_time,
+            "trace_id": trace_id,
+            "response_text": response_text,
+            "generation_speed": generation_speed,
+            "error": None
+        }
+    except Exception as e:
+        return {
+            "status_code": status_code or 500,
+            "error": str(e),
+            "ttft": None,
+            "ttlt": time.time() - start_time,
+            "response_text": "",
+            "generation_speed": 0.0,
+            "trace_id": trace_id
+        }
+
+async def run_ui_test(context, base_url, query_text, run_id, run_dir):
+    page = None
+    console_logs = []
+    status_code = 200
+    start_time = time.time()
+    
+    try:
+        page = await context.new_page()
+        
+        # Subscribe to console log events
+        page.on("console", lambda msg: console_logs.append(f"[{msg.type}] {msg.text}"))
+        
+        trace_id = None
+        async def handle_request(req):
+            nonlocal trace_id
+            if "assistants/default_assistant:" in req.url:
+                headers = await req.all_headers()
+                trace_context = headers.get("x-cloud-trace-context", "")
+                if trace_context:
+                    trace_id = trace_context.split("/")[0]
+        
+        page.on("request", handle_request)
+        await page.goto(base_url)
+        await page.wait_for_selector(".ProseMirror", timeout=30000)
+        
+        # Click the Preview tab button ONLY if it exists in the header shadow DOM
+        click_preview_tab_js = """
+        () => {
+            const findInShadows = (root, selector) => {
+                const el = root.querySelector(selector);
+                if (el) return el;
+                const all = root.querySelectorAll('*');
+                for (const child of all) {
+                    if (child.shadowRoot) {
+                        const found = findInShadows(child.shadowRoot, selector);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            const header = findInShadows(document, 'ucs-agent-header');
+            if (header && header.shadowRoot) {
+                const previewTab = header.shadowRoot.querySelector('[data-test-id="preview-tab"]');
+                if (previewTab) {
+                    previewTab.click();
+                    return true;
+                }
+            }
+            return false;
+        }
+        """
+        did_click = await page.evaluate(click_preview_tab_js)
+        if did_click:
+            # Wait for the preview panel to animate open and load
+            await asyncio.sleep(2.0)
+        
+        js_func = """
+        async (query) => {
+            const findInShadows = (root, selector) => {
+                const el = root.querySelector(selector);
+                if (el) return el;
+                const all = root.querySelectorAll('*');
+                for (const child of all) {
+                    if (child.shadowRoot) {
+                        const found = findInShadows(child.shadowRoot, selector);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            const previewContainer = findInShadows(document, 'ucs-agent-builder-preview');
+            const searchRoot = previewContainer ? previewContainer.shadowRoot : document;
+
+            const pm = findInShadows(searchRoot, '.ProseMirror');
+            if (!pm) return { error: 'Input box not found' };
+
+            pm.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+            document.execCommand('insertText', false, query);
+            pm.dispatchEvent(new Event('input', { bubbles: true }));
+
+            let sendBtn = findInShadows(searchRoot, 'md-icon-button.send-button');
+            let innerBtn = sendBtn ? sendBtn.shadowRoot.querySelector('button') : null;
+            let attempts = 0;
+            while ((!innerBtn || innerBtn.disabled) && attempts < 20) {
+                await new Promise(r => setTimeout(r, 50));
+                sendBtn = findInShadows(searchRoot, 'md-icon-button.send-button');
+                innerBtn = sendBtn ? sendBtn.shadowRoot.querySelector('button') : null;
+                attempts++;
+            }
+
+            if (!innerBtn || innerBtn.disabled) {
+                return { error: 'Send button remained disabled after typing' };
+            }
+
+            const startTime = performance.now();
+            innerBtn.click();
+
+            return new Promise((resolve) => {
+                let ttft = null;
+                let ttlt = null;
+                let lastText = "";
+                let lastChangeTime = performance.now();
+                const pollInterval = 50;
+                const timeoutLimit = 90000;
+
+                const check = setInterval(() => {
+                    const elapsed = performance.now() - startTime;
+                    if (elapsed > timeoutLimit) {
+                        clearInterval(check);
+                        resolve({ error: 'Timeout waiting for response', ttft, partial_ttlt: (performance.now() - startTime) / 1000 });
+                        return;
+                    }
+
+                    const conversation = findInShadows(searchRoot, 'ucs-conversation');
+                    const mainDiv = conversation ? conversation.shadowRoot.querySelector('.main') : null;
+                    const currentTurns = mainDiv ? mainDiv.querySelectorAll('.turn') : [];
+                    if (currentTurns.length <= 0) {
+                        return;
+                    }
+
+                    const lastTurn = currentTurns[currentTurns.length - 1];
+                    const summaryDiv = findInShadows(lastTurn, '.summary');
+                    const footer = findInShadows(lastTurn, 'ucs-answer-footer');
+
+                    const markdownDoc = summaryDiv ? findInShadows(summaryDiv, '.markdown-document') : null;
+                    const text = markdownDoc ? markdownDoc.innerText.trim() : "";
+
+                    if (text.length > 0 && ttft === null) {
+                        ttft = (performance.now() - startTime) / 1000;
+                    }
+
+                    if (text !== lastText) {
+                        lastText = text;
+                        lastChangeTime = performance.now();
+                    }
+
+                    const footerVisible = footer && footer.offsetWidth > 0;
+                    const noChangeElapsed = performance.now() - lastChangeTime;
+
+                    if (text.length > 0 && (footerVisible || noChangeElapsed > 3000)) {
+                        clearInterval(check);
+                        ttlt = (lastChangeTime - startTime) / 1000;
+                        resolve({ ttft, ttlt, text_length: text.length, text });
+                    }
+                }, pollInterval);
+            });
+        }
+        """
+        res = await page.evaluate(js_func, query_text)
+        
+        # Wait briefly for trace ID
+        await asyncio.sleep(1.0)
+        page.remove_listener("request", handle_request)
+        
+        # Save console logs to file
+        log_dir = f"{run_dir}/logs"
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = f"{log_dir}/browser_run_{run_id}.log"
+        with open(log_path, "w") as lf:
+            lf.write("\n".join(console_logs))
+            
+        if "error" in res:
+            status_code = 500
+            err_path = f"{run_dir}/screenshots/ui_error_{run_id}.png"
+            os.makedirs(os.path.dirname(err_path), exist_ok=True)
+            await page.screenshot(path=err_path)
+            await page.close()
+            return {
+                "status_code": status_code,
+                "error": f"{res.get('error')} (Console: {log_path})",
+                "ttft": res.get("ttft"),
+                "ttlt": res.get("partial_ttlt") or (time.time() - start_time),
+                "response_text": "",
+                "generation_speed": 0.0,
+                "trace_id": trace_id or "N/A"
+            }
+            
+        # Capture success screenshot
+        shot_path = f"screenshots/ui_run_{run_id}.png"
+        abs_shot_path = f"{run_dir}/{shot_path}"
+        os.makedirs(os.path.dirname(abs_shot_path), exist_ok=True)
+        await page.screenshot(path=abs_shot_path)
+        await page.close()
+        
+        response_text = res.get("text", "")
+        generation_duration = (res["ttlt"] - res["ttft"]) if (res["ttft"] is not None and res["ttlt"] is not None) else 0.0
+        generation_speed = len(response_text) / generation_duration if generation_duration > 0 else 0.0
+        
+        return {
+            "status_code": 200,
+            "ttft": res["ttft"],
+            "ttlt": res["ttlt"],
+            "trace_id": trace_id or "N/A",
+            "response_text": response_text,
+            "generation_speed": generation_speed,
+            "screenshot_path": shot_path,
+            "console_logs_path": f"logs/browser_run_{run_id}.log",
+            "error": None
+        }
+    except Exception as e:
+        status_code = 500
+        if page:
+            try:
+                err_path = f"{run_dir}/screenshots/ui_error_catch_{run_id}.png"
+                os.makedirs(os.path.dirname(err_path), exist_ok=True)
+                await page.screenshot(path=err_path)
+                await page.close()
+            except Exception:
+                pass
+        return {
+            "status_code": status_code,
+            "error": str(e),
+            "ttft": None,
+            "ttlt": time.time() - start_time,
+            "response_text": "",
+            "generation_speed": 0.0,
+            "trace_id": "N/A"
+        }
+
+async def worker(semaphore, context, base_url, client, credentials, project_id, engine_id, scenario, query, run_id, run_dir):
+    is_ui = (scenario["api"] == "ui")
+    if is_ui:
+        target_agent_id = scenario.get("agent_id", "core_assistant")
+        if target_agent_id == "core_assistant":
+            scenario_url = base_url
+        else:
+            match = re.search(r"/cid/([^/?#]+)", base_url)
+            cid = match.group(1) if match else "c33a03fe-9fbc-4ce7-ad44-85195fbe5625"
+            scenario_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}/r/agent/{target_agent_id}/session/-?hl=en_US"
+            
+        async with semaphore:
+            res = await run_ui_test(context, scenario_url, query, run_id, run_dir)
+            res["run_id"] = run_id
+            res["api"] = "ui (CDP)"
+            res["skipping_mode"] = "REQUEST_ASSIST"
+            return res
+            
+    async with semaphore:
+        is_stream = (scenario["api"] == "streamAssist")
+        if is_stream:
+            res = await run_async_stream_test(client, credentials, project_id, engine_id, scenario, query)
+        else:
+            res = await run_async_sync_test(client, credentials, project_id, engine_id, scenario, query)
+            res["ttft"] = None
+        
+        res["run_id"] = run_id
+        res["api"] = scenario["api"]
+        res["skipping_mode"] = "REQUEST_ASSIST" if "REQUEST_ASSIST" in str(scenario) else "UNSPECIFIED"
+        return res
+
+async def main_async(manifest_path):
+    print(f"Loading configuration manifest: {manifest_path}")
+    with open(manifest_path, "r") as f:
+        config = json.load(f)
+        
+    project_id = config["project_id"]
+    engine_id = config["engine_id"]
+    query = config["query"]
+    iterations = config["iterations"]
+    max_concurrency = config.get("max_concurrent_calls", 3)
+    scenarios = config["scenarios"]
+    test_id = config.get("test_id", "unknown")
+    
+    # Create execution runs folder
+    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    run_dir = f"runs/run_{timestamp}_{test_id}"
+    os.makedirs(run_dir, exist_ok=True)
+    print(f"Initialized local execution folder: {run_dir}")
+    
+    print("Resolving credentials...")
+    credentials = get_credentials()
+    
+    semaphore = asyncio.Semaphore(max_concurrency)
+    
+    print("Connecting Playwright to active browser context...")
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp("http://localhost:9222")
+        context = browser.contexts[0]
+        
+        # Resolve Base URL
+        base_url = None
+        for pg in context.pages:
+            if "vertexaisearch.cloud.google.com" in pg.url:
+                url = pg.url
+                match = re.search(r"/cid/([^/?#]+)", url)
+                if match:
+                    cid = match.group(1)
+                    base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
+                    break
+        
+        if not base_url:
+            print("ERROR: Active Vertex AI Search page tab not found. Launch Chrome with debug port 9222 first.")
+            return
+            
+        print(f"Resolved base agent URL: {base_url}")
+        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            results = {}
+            for s in scenarios:
+                s_name = s["name"]
+                print(f"Scheduling concurrent runs for scenario: {s_name}...")
+                tasks = [
+                    worker(semaphore, context, base_url, client, credentials, project_id, engine_id, s, s.get("query", query), i, run_dir)
+                    for i in range(1, iterations + 1)
+                ]
+                scenario_results = await asyncio.gather(*tasks)
+                results[s_name] = scenario_results
+                
+    # Build report output structures
+    results_json = {
+        "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "test_id": test_id,
+        "manifest_used": manifest_path,
+        "scenarios": {}
+    }
+    
+    # Populate results_json scenarios structure first
+    for s in scenarios:
+        s_name = s["name"]
+        runs = results[s_name]
+        
+        ttft_list = []
+        ttlt_list = []
+        speed_list = []
+        success_count = 0
+        scenario_runs_data = []
+        
+        for r in runs:
+            scenario_runs_data.append(r)
+            if not r.get("error"):
+                success_count += 1
+                if r.get("ttft") is not None:
+                    ttft_list.append(r["ttft"])
+                if r.get("ttlt") is not None:
+                    ttlt_list.append(r["ttlt"])
+                if r.get("generation_speed", 0) > 0:
+                    speed_list.append(r["generation_speed"])
+                    
+        # Compute Stats
+        ttft_min, ttft_max, ttft_avg, ttft_p90 = get_stats(ttft_list)
+        ttlt_min, ttlt_max, ttlt_avg, ttlt_p90 = get_stats(ttlt_list)
+        speed_min, speed_max, speed_avg, speed_p90 = get_stats(speed_list)
+        success_rate = (success_count / len(runs)) * 100.0 if runs else 0.0
+        
+        results_json["scenarios"][s_name] = {
+            "aggregated_stats": {
+                "ttft_avg_s": ttft_avg,
+                "ttlt_avg_s": ttlt_avg,
+                "generation_speed_chars_per_sec_avg": speed_avg,
+                "success_rate_percent": success_rate
+            },
+            "runs": scenario_runs_data
+        }
+
+    # Write consolidated results.json outputs first
+    with open(f"{run_dir}/results.json", "w") as jf:
+        json.dump(results_json, jf, indent=2)
+        
+    # Generate Charts from results.json
+    try:
+        from chart_generator import generate_charts_for_run
+        chart_links = generate_charts_for_run(f"{run_dir}/results.json", run_dir)
+    except Exception as e:
+        print(f"Warning: Failed to generate charts: {e}")
+        chart_links = {}
+
+    # Now, build report.md structure
+    report_md = f"# Latency Audit Report: Test Run {test_id}\n"
+    report_md += f"Executed at: `{results_json['timestamp']}` using manifest: `{manifest_path}`\n\n"
+    
+    if "combined" in chart_links:
+        report_md += "## 📊 Unified Latency Comparison (TTFT vs. TTLT)\n"
+        report_md += f"![Unified Latency Comparison]({chart_links['combined']})\n\n"
+        report_md += "---\n\n"
+    
+    for s in scenarios:
+        s_name = s["name"]
+        runs = results[s_name]
+        
+        report_md += f"## Scenario: {s_name}\n"
+        report_md += "| Run ID | API Used | status_code | TTFT (s) | TTLT (s) | Speed (char/s) | Trace & Screenshot |\n"
+        report_md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        
+        for r in runs:
+            if r.get("error"):
+                report_md += f"| {r['run_id']} | {r['api']} | {r['status_code']} | ERROR | ERROR | 0.0 | {r['error'][:40]} |\n"
+            else:
+                ttft_str = f"{r['ttft']:.3f}" if r.get('ttft') is not None else "N/A"
+                ttlt_str = f"{r['ttlt']:.3f}" if r.get('ttlt') is not None else "N/A"
+                speed_str = f"{r['generation_speed']:.1f}"
+                
+                trace_url = f"https://console.cloud.google.com/traces/list?project={project_id}&tid={r['trace_id']}" if r.get('trace_id') and r['trace_id'] != "N/A" else ""
+                trace_link = f"[Trace Link]({trace_url})" if trace_url else "N/A"
+                
+                if r.get("screenshot_path"):
+                    trace_link += f" \\| [Screenshot]({r['screenshot_path']})"
+                    
+                report_md += f"| {r['run_id']} | {r['api']} | {r['status_code']} | {ttft_str} | {ttlt_str} | {speed_str} | {trace_link} |\n"
+                
+        # Append Stats details
+        s_stats = results_json["scenarios"][s_name]["aggregated_stats"]
+        runs_data = results_json["scenarios"][s_name]["runs"]
+        
+        # Get raw stats
+        ttft_list = [r["ttft"] for r in runs_data if not r.get("error") and r.get("ttft") is not None]
+        ttlt_list = [r["ttlt"] for r in runs_data if not r.get("error") and r.get("ttlt") is not None]
+        speed_list = [r["generation_speed"] for r in runs_data if not r.get("error") and r.get("generation_speed", 0) > 0]
+        
+        ttft_min, ttft_max, ttft_avg, ttft_p90 = get_stats(ttft_list)
+        ttlt_min, ttlt_max, ttlt_avg, ttlt_p90 = get_stats(ttlt_list)
+        speed_min, speed_max, speed_avg, speed_p90 = get_stats(speed_list)
+        
+        def fmt(val, unit="s"):
+            return f"{val:.3f} {unit}" if val is not None else "N/A"
+            
+        report_md += f"\n**Statistics for {s_name}:**\n"
+        report_md += f"* **Success Rate**: {s_stats['success_rate_percent']:.1f}%\n"
+        report_md += f"* **TTFT**: Min = {fmt(ttft_min)}, Max = {fmt(ttft_max)}, Avg = {fmt(ttft_avg)}, P90 = {fmt(ttft_p90)}\n"
+        report_md += f"* **TTLT**: Min = {fmt(ttlt_min)}, Max = {fmt(ttlt_max)}, Avg = {fmt(ttlt_avg)}, P90 = {fmt(ttlt_p90)}\n"
+        report_md += f"* **Speed**: Min = {fmt(speed_min, 'char/s')}, Max = {fmt(speed_max, 'char/s')}, Avg = {fmt(speed_avg, 'char/s')}, P90 = {fmt(speed_p90, 'char/s')}\n\n"
+        
+        # Append visual charts if generated
+        if s_name in chart_links:
+            runs_chart = chart_links[s_name].get("runs_chart")
+            hist_chart = chart_links[s_name].get("hist_chart")
+            if runs_chart or hist_chart:
+                report_md += "### 📈 Latency Visualizations\n\n"
+                if runs_chart:
+                    report_md += f"**Latency Across Runs (TTFT vs TTLT)**:\n\n![Latency Across Runs]({runs_chart})\n\n"
+                if hist_chart:
+                    report_md += f"**Latency Bin Distribution**:\n\n![Latency Distribution]({hist_chart})\n\n"
+
+    # Add UI Screenshots stacked at the bottom of the markdown report
+    report_md += "## 🖼️ Web App UI Run Screenshots\n\n"
+    has_ui = False
+    ui_scenario_name = next((name for name in results if "ui" in name.lower()), None)
+    if ui_scenario_name:
+        for r in results[ui_scenario_name]:
+            if r.get("screenshot_path"):
+                has_ui = True
+                report_md += f"### UI Run {r['run_id']}\n"
+                report_md += f"![UI Run {r['run_id']}]({r['screenshot_path']})\n\n"
+                
+    if not has_ui:
+        report_md += "*No UI screenshots captured for this run.*\n"
+
+    with open(f"{run_dir}/report.md", "w") as mf:
+        mf.write(report_md)
+        
+    # Print Markdown output to stdout for the session log
+    print("\n=================== BENCHMARK REPORT ===================")
+    print(report_md)
+    print("========================================================")
+    print(f"All runs artifacts written successfully to: {run_dir}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Yahoo Gemini Enterprise Latency Auditor")
+    parser.add_argument(
+        "--manifest",
+        default="manifests/manifest_multi_query_template.json",
+        help="Path to the JSON configuration manifest"
+    )
+    args = parser.parse_args()
+    asyncio.run(main_async(args.manifest))
+
+if __name__ == '__main__':
+    main()

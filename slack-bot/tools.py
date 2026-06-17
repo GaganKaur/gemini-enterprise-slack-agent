@@ -106,6 +106,10 @@ def call_agentspace_search_api(query: str, tool_context: ToolContext) -> str:
                             if brace_count == 0 and in_object:
                                 try:
                                     obj = json.loads(buffer)
+                                    # Extract assistToken if present
+                                    assist_token = obj.get("assistToken")
+                                    if assist_token:
+                                        tool_context.state["latest_assist_token"] = assist_token
                                     answer_obj = obj.get("answer", {})
 
                                     # Extract plan details if emitted in stream
@@ -115,7 +119,9 @@ def call_agentspace_search_api(query: str, tool_context: ToolContext) -> str:
                                             print(f"[PLAN CHUNK] {content_block['text']}", flush=True)
 
                                     # Extract text output
-                                    if "replyText" in answer_obj.get("reply", {}):
+                                    if "answerText" in answer_obj:
+                                        full_answer_text += answer_obj["answerText"]
+                                    elif "replyText" in answer_obj.get("reply", {}):
                                         text = answer_obj["reply"]["replyText"]
                                         full_answer_text += text
 
