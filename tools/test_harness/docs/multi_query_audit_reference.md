@@ -61,17 +61,17 @@ The benchmark suite executes 9 test scenarios mapping to different connector lay
 ### 📊 Performance Scale Matrix (n=10)
 Averages computed over 10 consecutive successful runs (seconds).
 
-| Query ID & Connectors | Connectors | Stream TTFT (s) | UI TTFT (s) | Stream TTLT (s) | UI TTLT (s) | Speedup / Overhead Comparison |
+| Query ID & Connectors | Connectors | streamAssist API TTFT (s) | UI TTFT (s) | streamAssist API TTLT (s) | UI TTLT (s) | Speedup / Overhead Comparison |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **Q1. GDrive (PTO Rollover)** | 1 | **7.964** | 23.769 | **19.303** | 24.560 | Stream starts 3.0x faster, saves 5.2s TTLT |
-| **Q2. Confluence (VPN Setup)** | 1 | **7.838** | 24.635 | **23.802** | 26.192 | Stream starts 3.1x faster, saves 2.4s TTLT |
-| **Q3. Jira (Broken Keyboard)** | 1 | **7.711** | 16.975 | **18.045** | 18.484 | Stream starts 2.2x faster, saves 0.4s TTLT |
-| **Q4. LumApps GCS (Rollout)** | 1 | **8.324** | 21.459 | **19.371** | 23.108 | Stream starts 2.5x faster, saves 3.7s TTLT |
-| **Q5. Conf + Jira (VPN Issues)** | 2 | **7.854** | 28.199 | **28.831** | 30.123 | Stream starts 3.5x faster, saves 1.3s TTLT |
-| **Q6. GDrive + Conf (Laptop)** | 2 | **8.284** | 28.593 | **35.773** | 29.823 | Stream starts 3.4x faster; UI ends 6.0s faster |
-| **Q7. LumApps + Jira (Workspace)**| 2 | **7.842** | 22.706 | **27.257** | 24.202 | Stream starts 2.9x faster; UI ends 3.0s faster |
-| **Q8. GDrive + Conf + Jira** | 3 | **7.796** | 45.492 | **38.127** | 53.066 | Stream starts 5.8x faster, saves 14.9s TTLT |
-| **Q9. 3-Way IT Checklist** | 3 | **8.092** | 31.543 | **42.249** | 35.938 | Stream starts 3.8x faster; UI ends 6.3s faster |
+| **Q1. GDrive (PTO Rollover)** | 1 | **7.964** | 23.769 | **19.303** | 24.560 | streamAssist API starts 3.0x faster, saves 5.2s TTLT |
+| **Q2. Confluence (VPN Setup)** | 1 | **7.838** | 24.635 | **23.802** | 26.192 | streamAssist API starts 3.1x faster, saves 2.4s TTLT |
+| **Q3. Jira (Broken Keyboard)** | 1 | **7.711** | 16.975 | **18.045** | 18.484 | streamAssist API starts 2.2x faster, saves 0.4s TTLT |
+| **Q4. LumApps GCS (Rollout)** | 1 | **8.324** | 21.459 | **19.371** | 23.108 | streamAssist API starts 2.5x faster, saves 3.7s TTLT |
+| **Q5. Conf + Jira (VPN Issues)** | 2 | **7.854** | 28.199 | **28.831** | 30.123 | streamAssist API starts 3.5x faster, saves 1.3s TTLT |
+| **Q6. GDrive + Conf (Laptop)** | 2 | **8.284** | 28.593 | **35.773** | 29.823 | streamAssist API starts 3.4x faster; UI ends 6.0s faster |
+| **Q7. LumApps + Jira (Workspace)**| 2 | **7.842** | 22.706 | **27.257** | 24.202 | streamAssist API starts 2.9x faster; UI ends 3.0s faster |
+| **Q8. GDrive + Conf + Jira** | 3 | **7.796** | 45.492 | **38.127** | 53.066 | streamAssist API starts 5.8x faster, saves 14.9s TTLT |
+| **Q9. 3-Way IT Checklist** | 3 | **8.092** | 31.543 | **42.249** | 35.938 | streamAssist API starts 3.8x faster; UI ends 6.3s faster |
 
 ### 📈 Unified Latency Comparison (TTFT vs. TTLT)
 ![Unified Latency Comparison](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/combined_latency_comparison.png)
@@ -88,7 +88,7 @@ _source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemi
 
 #### Latency Timelines (n=10)
 
-##### Programmatic streamAssist (Q8 Stream)
+##### Programmatic streamAssist (Q8 streamAssist API)
 ![Q8 Stream runs](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_stream_runs.png)
 
 ##### Web App UI Chat (Q8 UI)
@@ -96,7 +96,7 @@ _source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemi
 
 #### Latency Bin Distributions (5s Bins)
 
-##### Programmatic streamAssist (Q8 Stream)
+##### Programmatic streamAssist (Q8 streamAssist API)
 ![Q8 Stream Histogram](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q8_gdrive_confluence_jira_remote_work_stream_histogram.png)
 
 ##### Web App UI Chat (Q8 UI)
@@ -108,7 +108,7 @@ _source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemi
 
 #### Latency Timelines (n=10)
 
-##### Programmatic streamAssist (Q9 Stream)
+##### Programmatic streamAssist (Q9 streamAssist API)
 ![Q9 Stream runs](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q9_3_way_it_checklist_stream_runs.png)
 
 ##### Web App UI Chat (Q9 UI)
@@ -116,7 +116,7 @@ _source: [latency_scaling.dot](file:///usr/local/google/home/thomascummins/.gemi
 
 #### Latency Bin Distributions (5s Bins)
 
-##### Programmatic streamAssist (Q9 Stream)
+##### Programmatic streamAssist (Q9 streamAssist API)
 ![Q9 Stream Histogram](/usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/run_002_multi_query/charts/q9_3_way_it_checklist_stream_histogram.png)
 
 ##### Web App UI Chat (Q9 UI)
