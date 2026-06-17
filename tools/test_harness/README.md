@@ -80,24 +80,93 @@ The harness is configured using a JSON manifest file located at `manifests/manif
 
 ## 🚀 3. Executing the Test Harness
 
-Run the benchmark runner script using `uv` to trigger isolated execution:
+To ensure the test harness is properly configured, execute the benchmark in two separate phases:
 
-```bash
-# Navigate to the test_harness directory
-cd tools/test_harness
+### Phase 1: Run the Environment Smoke Test
+Before executing the full benchmark suite, run a single-iteration smoke test to verify your credentials, browser launching, and report rendering configuration.
 
-# Option A: Execute in interactive mode (opens a browser window for login)
-PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/manifest_multi_query_template.json
+1. Navigate to the test harness directory:
+   ```bash
+   cd tools/test_harness
+   ```
+2. Run the smoke test using your active environment folder (e.g., `yahoo_environment`):
+   ```bash
+   # NATIVE LOCAL RUN (Interactive Mode)
+   PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/yahoo_environment/verify_manifest.json
 
-# Option B: Execute connecting to an already running Chrome (on port 9222)
-PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
-  --manifest=manifests/manifest_multi_query_template.json \
-  --cdp-url=http://localhost:9222
-```
+   # REMOTE VM RUN (CDP Mode - connects to your active browser window)
+   PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
+     --manifest=manifests/yahoo_environment/verify_manifest.json \
+     --cdp-url=http://localhost:9222
+   ```
+
+#### 🛡️ Expected Smoke Test Results:
+* **Terminal output**:
+  ```text
+  Loading configuration manifest: manifests/yahoo_environment/verify_manifest.json
+  Initialized local execution folder: runs/run_20260617_185229_verify
+  Resolving credentials...
+  Initializing Playwright browser context...
+  Authentication successful! Detected Configuration ID: c33a03fe-9fbc-4ce7-ad44-85195fbe5625
+  Scheduling concurrent runs for scenario: Q1. GDrive - PTO Rollover (Stream)...
+  Scheduling concurrent runs for scenario: Q1. GDrive - PTO Rollover (UI)...
+  Generated unified latency comparison chart at: runs/run_20260617_185229_verify/charts/combined_latency_comparison.png
+  All runs artifacts written successfully to: runs/run_20260617_185229_verify
+  ```
+* **Generated Assets**:
+  A timestamped folder `runs/run_<timestamp>_verify/` containing:
+  - `report.md`: Master Markdown report summary.
+  - `results.json`: Raw execution metrics and API details.
+  - `charts/`: Comparative grouped bar charts and bin-distribution graphs.
+  - `screenshots/`: Snapshots of the browser UI interactions during execution.
 
 ---
 
-## 📊 4. Interpreting Output Reports
+### Phase 2: Run the Full Latency Audit
+Once the smoke test completes successfully, you are ready to kick off the full benchmarking execution.
+
+1. Execute the full audit manifest:
+   ```bash
+   # NATIVE LOCAL RUN (Interactive Mode)
+   PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/yahoo_environment/manifest_multi_query.json
+
+   # REMOTE VM RUN (CDP Mode)
+   PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
+     --manifest=manifests/yahoo_environment/manifest_multi_query.json \
+     --cdp-url=http://localhost:9222
+   ```
+2. This runs **5 iterations** across **9 unique scenarios** for both REST API and Web UI (90 total requests). It may take 10 to 15 minutes to complete depending on network conditions.
+3. The results will be aggregated inside a master report at `runs/run_<timestamp>_002/report.md`.
+
+---
+
+## ❓ 4. FAQs & Troubleshooting
+
+### Q1: I get `browser_type.launch: Display not found. Are you running in a headless environment?`
+* **Why this happens**: You are running the benchmark on a remote Linux server/VM (e.g. Cloudtop) which lacks a physical monitor display, but the script is attempting to launch a headful GUI Chrome window.
+* **How to fix**: 
+  - **Local machine execution**: Run the script natively on your macOS/Windows laptop.
+  - **CDP mode fallback**: Start Chrome on your machine with remote debugging active, forward that port to the VM, and append the `--cdp-url` argument to your run command.
+
+### Q2: The script hangs or fails with `ERROR: Authentication timed out or Configuration ID not detected`
+* **Why this happens**: The interactive browser window popped up, but login was not completed within the 60-second window, or the browser profile did not match your terminal's `gcloud` context.
+* **How to fix**:
+  1. Verify your CLI configuration by running `gcloud config list` and `gcloud auth list`. Ensure the active account matches the email profile you use in the browser.
+  2. Start the script again, and immediately log in to the Vertex AI console once the Chrome tab opens.
+
+### Q3: I get `ModuleNotFoundError: No module named 'src'`
+* **Why this happens**: Python cannot resolve the path to the internal imports inside the `src/` directory.
+* **How to fix**: Ensure you prepended `PYTHONPATH=src` to the command line, and that you are executing the command from the `tools/test_harness` root directory.
+
+### Q4: Scenario tasks fail with `PermissionDenied` or `403` status codes
+* **Why this happens**: Your Google account lacks access rights to the Vertex AI Search engine, or the IDs configured in your manifest do not exist.
+* **How to fix**:
+  1. Open the Vertex AI Search console in Chrome and check that you can query the datastores manually.
+  2. Verify that `project_id`, `engine_id`, and `sub_agent_id` configured in your manifest folder (e.g., `yahoo_environment/manifest_multi_query.json`) match the values shown in the console URL.
+
+---
+
+## 📊 5. Interpreting Output Reports
 
 All results, logs, chart distributions, and visual validation snapshots are written to a unique timestamped folder under `runs/run_<timestamp>/`:
 
@@ -114,7 +183,7 @@ Following Google's internal latency playbook guidelines, performance validation 
 
 ---
 
-## 📂 5. Folder Directory Map
+## 📂 6. Folder Directory Map
 *   `src/run_concurrent_benchmark.py`: Main concurrent worker harness script.
 *   `src/browser_controller.py`: Playwright POM controller encapsulating shadow DOM page logic.
 *   `src/chart_generator.py`: Plotting utility generating latency bar charts and distribution timelines.
