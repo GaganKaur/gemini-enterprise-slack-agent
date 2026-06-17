@@ -43,7 +43,7 @@ source $HOME/.local/bin/env
 ### C. Browser Environment (Chrome Profile Selection)
 The UI benchmark runs locally by launching an interactive Chrome window.
 1. **Interactive Login Mode (Default)**:  
-   When you start the benchmark runner, it will automatically launch a new Chrome browser window and navigate to the Vertex AI Search console.
+   When you start the benchmark runner, it will automatically launch a new Chrome browser window and navigate to the Google Cloud Console (Gen App Builder) sign-in page.
    * You **must** log in using the same account configured in Step A (`<your-corp-email>`).
    * If you have multiple Chrome profiles, ensure you are signing in to the profile associated with that email.
 2. **CDP Option (Optional / Headless VMs)**:  
@@ -172,14 +172,24 @@ All results, logs, chart distributions, and visual validation snapshots are writ
 
 ### A. The Master Markdown Report (`report.md`)
 This report aggregates the benchmark run details:
+*   **Run Execution Metadata**: Displays active execution parameters:
+    *   **Concurrency Limit**: Total number of simultaneous workers.
+    *   **Total Duration**: Wall-clock execution time.
+    *   **Average Throughput**: Total queries divided by duration, representing average queries per minute (QPM) submitted to the API.
+*   **Query Complexity Profiling**: Each test scenario is tagged with a Complexity Level:
+    *   *Level 1*: Intrinsic Knowledge / Grounding Bypassed (e.g. hello, greetings).
+    *   *Level 2*: Single-Connector RAG (searching a single index).
+    *   *Level 3*: Multi-Connector Federated RAG (searching 2–3 active indexes).
+    *   *Level 4*: Custom Agent Tooling / Reasoning (orchestrator routing).
 *   **Unified Latency Comparison Chart**: Grouped bar chart comparing TTFT and TTLT (with error range bars) for all scenarios.
 *   **Performance Scale Tables**: Displays detailed lists of status codes, TTFT, TTLT, characters per second, and Google Cloud Console Trace Links for every run.
 
 ### B. Standard Metrics Focus
 Following Google's internal latency playbook guidelines, performance validation is analyzed using **Percentile Distributions (P50, P90, P95, P99)** rather than raw averages:
 *   **P50 (Median)**: Represents typical user experience.
-*   **P95 (General Trend)**: Standard benchmark metric for identifying general latency trends while ignoring network spikes.
-*   **P99 (Worst Case)**: Identifies tail latency and rare freezes.
+*   **P90 / P95 (General Trend)**: Standard benchmark metrics for identifying general latency trends while ignoring network spikes.
+*   **P99 (Worst Case)**: Identifies tail latency, slow cold starts, and rare freezes.
+*   **Min / Max / Avg**: Included as fallback boundaries to highlight raw scaling limits.
 
 ---
 
