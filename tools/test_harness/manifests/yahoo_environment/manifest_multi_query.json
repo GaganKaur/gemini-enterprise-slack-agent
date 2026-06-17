@@ -5,7 +5,7 @@
   "project_id": "corp-veritas-d",
   "engine_id": "<YAHOO_VERTEX_SEARCH_ENGINE_ID>",
   "query": "what is the company PTO policy?",
-  "iterations": 10,
+  "iterations": 5,
   "max_concurrent_calls": 3,
   "scenarios": [
     {

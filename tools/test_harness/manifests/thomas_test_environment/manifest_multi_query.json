@@ -5,7 +5,7 @@
   "project_id": "genai-alpha-422116",
   "engine_id": "yahoo_1780365163254",
   "query": "what is the company PTO policy?",
-  "iterations": 10,
+  "iterations": 5,
   "max_concurrent_calls": 3,
   "scenarios": [
     {
