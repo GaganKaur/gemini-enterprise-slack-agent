@@ -47,12 +47,12 @@ The UI benchmark runs locally by launching an interactive Chrome window.
    * You **must** log in using the same account configured in Step A (`<your-corp-email>`).
    * If you have multiple Chrome profiles, ensure you are signing in to the profile associated with that email.
 2. **CDP Option (Optional / Headless VMs)**:  
-   If you are running the test harness on a remote VM, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port:
+   If you are running the test harness on a remote VM, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port (e.g., `9222`):
    ```bash
    # Start Chrome with remote debugging active (e.g. on macOS)
    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
    ```
-   *Note: If Chrome is already open, make sure you launch this debugging session under the Chrome profile containing your active Google Cloud Console credentials.*
+   *Note: `9222` is just an example port. You can choose any free port (e.g., `9333`) as long as you match it when passing `--cdp-url` to the benchmark runner script. Additionally, make sure you launch this debugging session under the Chrome profile containing your active Google Cloud Console credentials.*
 
 ---
 
