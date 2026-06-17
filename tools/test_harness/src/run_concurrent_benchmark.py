@@ -516,8 +516,8 @@ async def main_async(manifest_path, cdp_url=None):
             context = await browser.new_context()
             page = await context.new_page()
             
-            print("Navigating to Vertex AI Search Console...")
-            await page.goto("https://vertexaisearch.cloud.google.com/")
+            print("Navigating to Google Cloud Console (Gen App Builder)...")
+            await page.goto("https://console.cloud.google.com/gen-app-builder/")
             
             print("\n>>> Please complete your sign-in to the Vertex AI Search console in the opened browser window...")
             
