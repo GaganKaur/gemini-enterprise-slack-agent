@@ -1,66 +1,63 @@
-# Reflective Handoff: Test Harness Simplification & Local Execution
+# Reflective Handoff: Yahoo Gemini Enterprise Latency Audit
 
-This document serves as the context transfer file for the local Jetski IDE agent running on your MacBook to resume and complete the simplification of the Yahoo Gemini Enterprise Latency Test Harness.
-
----
-
-## 1. Current Context & Objectives
-
-*   **Repository Location**: `tools/gemini-enterprise-slack-agent/tools/test_harness`
-*   **Active Git Branch**: `feat/test-harness`
-*   **Target Objective**: Modify the test harness to run completely locally on a developer machine (Mac/Linux/Windows) without complex remote port-forwarding configurations or pre-running Chrome with CDP flags.
+This handoff document synthesizes the progress, architecture details, and verification steps completed during this session to enable seamless continuation on your MacBook's JetSki instance.
 
 ---
 
-## 2. Working Directory Structure & Key Files
-
-All relevant code and configurations have been consolidated inside `tools/test_harness/`:
-1.  **[src/run_concurrent_benchmark.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/src/run_concurrent_benchmark.py)**: The main test runner script. Authenticates API calls via Google Application Default Credentials (ADC) and coordinates concurrent runs (Sync API, Stream API, and Browser UI).
-2.  **[src/browser_controller.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/src/browser_controller.py)**: Playwright page controller that automates query inputs into the ProseMirror editor and extracts TTFT/TTLT metrics.
-3.  **[src/chart_generator.py](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/src/chart_generator.py)**: Script that reads execution `results.json` and renders Matplotlib charts.
-4.  **[manifests/thomas_test_environment/verify_manifest.json](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/manifests/thomas_test_environment/verify_manifest.json)**: Minimal manifest for smoke testing in Thomas's environment.
-5.  **[README.md](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/README.md)**: Setup and guide for running the harness.
+## 📋 1. Project Context & Objectives
+*   **Workspace**: `yahoo` (replication and UAT latency audit for Yahoo Gemini Enterprise integration).
+*   **Harness Target**: Compare performance of the programmatic **`streamAssist` REST API** (using intent classifier bypass mode) versus the **Web App UI Preview Chat** in the console.
+*   **Deliverable**: A robust concurrent benchmarking harness measuring startup Time to First Token (TTFT) and total Time to Last Token (TTLT) across varying connector complexities (1 to 3 active enterprise indexes).
 
 ---
 
-## 3. The Implementation Plan (Next Steps for the Local Agent)
+## 🛠️ 2. Completed Implementations & Branch State
+All updates are committed to the local and remote branch **`feat/test-harness`** on **`origin`** (`GaganKaur/gemini-enterprise-slack-agent`).
 
-The local agent should implement the approved [test_harness_simplification_plan.md](file:///usr/local/google/home/thomascummins/.gemini/jetski/brain/53ba961d-8367-4e6d-9405-732264857432/test_harness_simplification_plan.md):
+### A. Code Enhancements (`src/run_concurrent_benchmark.py`)
+*   **Direct GCP Console Sign-in**: Changed the initial navigation URL to `https://console.cloud.google.com/gen-app-builder/`. Unauthenticated access to the root domain (`vertexaisearch.cloud.google.com/`) results in a 404 error page. Routing through the GCP Console handles authentication redirection, letting the script safely intercept the Configuration ID (`cid`) as the user logs in.
+*   **Expanded Percentiles**: Upgraded statistics calculation from simple averages to compile **P50 (Median)**, **P90**, **P95**, and **P99** distributions for TTFT, TTLT, and generation speed.
+*   **Throughput Telemetry**: Added throughput tracking to measure wall-clock run duration and calculate the average queries per minute (QPM) submitted.
+*   **Complexity Level Integration**: Reports now read and display a `"complexity_level"` attribute directly from the JSON manifest for each scenario (e.g. `Level 2: Single-Connector RAG`).
 
-### Step 1: Implement Interactive Browser Authentication in `src/run_concurrent_benchmark.py`
-Modify `main_async` to:
-- Accept an optional `--cdp-url` CLI flag.
-- **If `--cdp-url` is omitted**:
-  1. Launch a fresh local browser instance:
-     ```python
-     browser = await p.chromium.launch(headless=False, channel="chrome")
-     context = await browser.new_context()
-     page = await context.new_page()
-     ```
-  2. Navigate to `https://vertexaisearch.cloud.google.com/home`.
-  3. Prompt the user: `"Please log in to the Vertex AI Search console in the opened browser window..."`.
-  4. Poll `page.url` for up to 120 seconds to extract the Customer ID (`cid`) matching `/home/cid/([^/?#]+)`.
-  5. Once the `cid` is matched, proceed with the UI tests inside the same context.
-- **If `--cdp-url` is provided**: Keep existing CDP connection logic.
+### B. Manifest Metadata Injection
+*   All JSON manifests (templates and environment configs inside `manifests/`) have been updated to include complexity tags:
+    *   *Q1–Q4*: `Level 2: Single-Connector RAG`
+    *   *Q5–Q7*: `Level 3: Multi-Connector Federated RAG (2 Connectors)`
+    *   *Q8–Q9*: `Level 3: Multi-Connector Federated RAG (3 Connectors)`
 
-### Step 2: Simplify Python API Scopes
-In `get_credentials()`, remove the redundant drive scope:
-```python
-def get_credentials():
-    credentials, project = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-```
-This aligns authentication with standard developer ADC configuration.
+### C. Self-Contained Baseline Reference Document
+*   **Relative Asset Paths**: Copied all baseline charts, telemetry database `results.json`, logs, and screenshots into the repository at `tools/test_harness/docs/assets/`.
+*   **Handoff Report**: Regenerated [multi_query_audit_reference.md](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/docs/multi_query_audit_reference.md) to use relative image URLs and the new report table structure (complexity levels, full percentiles, and scenario timelines for Q1–Q9). It is fully committed to the repository and will render cleanly on GitHub or locally.
 
-### Step 3: Update and Simplify README.md
-- Document the new local interactive flow.
-- Clarify that no port-forwarding is required when running both Python and Chrome on the local machine.
-- Provide simple `uv run` commands.
+---
 
-### Step 4: Verification
-Verify local execution by running:
-```bash
-PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py --manifest=manifests/thomas_test_environment/verify_manifest.json
-```
-Ensure that the browser opens, waits for authentication, and correctly executes the suite.
+## ⚡ 3. Failed Paths to Avoid
+*   **Root Domain Redirection**: **Do not** attempt to navigate the headless/CDP browser directly to `https://vertexaisearch.cloud.google.com/`. Doing so results in a Google 404 error page if the browser session is unauthenticated. Always direct Playwright/CDP to `https://console.cloud.google.com/gen-app-builder/` first.
+*   **Absolute Image Paths**: Avoid embedding absolute local file system paths (e.g. referencing `.gemini/jetski/brain/` session dirs) in markdown documentation. All reference documents must pull assets from relative paths inside `docs/assets/` to ensure they render correctly on other machines.
+
+---
+
+## 🚀 4. How to Resume & Test on your MacBook
+
+1.  **Clone / Pull Branch**:
+    Switch to your MacBook workspace, pull the latest commits, and switch to the branch:
+    ```bash
+    git checkout feat/test-harness
+    git pull origin feat/test-harness
+    ```
+2.  **Verify Debugging Port**:
+    If running locally on your MacBook, make sure Chrome is started with remote debugging active:
+    ```bash
+    # On macOS Chrome:
+    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+    ```
+3.  **Run the Smoke Test**:
+    Navigate to `tools/test_harness` and execute the verification script using your active local browser profile:
+    ```bash
+    PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
+      --manifest=manifests/thomas_test_environment/verify_manifest.json \
+      --cdp-url=http://localhost:9222
+    ```
+4.  **Confirm Results**:
+    Check the terminal output and open the generated Markdown report `runs/run_<timestamp>_verify/report.md` to verify that execution metadata, complexity levels, percentiles, and embedded charts display correctly.
