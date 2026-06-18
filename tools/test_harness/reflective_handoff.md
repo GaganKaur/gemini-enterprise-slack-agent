@@ -1,63 +1,89 @@
-# Reflective Handoff: Yahoo Gemini Enterprise Latency Audit
+# Reflective Handoff & Next Steps
 
-This handoff document synthesizes the progress, architecture details, and verification steps completed during this session to enable seamless continuation on your MacBook's JetSki instance.
+This document outlines the accomplishments, discoveries, and specific instructions for the next agent session to resume testing and benchmarking on Cloudtop.
 
----
+## 1. Accomplishments & Code Changes
 
-## 📋 1. Project Context & Objectives
-*   **Workspace**: `yahoo` (replication and UAT latency audit for Yahoo Gemini Enterprise integration).
-*   **Harness Target**: Compare performance of the programmatic **`streamAssist` REST API** (using intent classifier bypass mode) versus the **Web App UI Preview Chat** in the console.
-*   **Deliverable**: A robust concurrent benchmarking harness measuring startup Time to First Token (TTFT) and total Time to Last Token (TTLT) across varying connector complexities (1 to 3 active enterprise indexes).
+### A. Documentation Updates
+*   **Root `README.md`**: Fully reverted to its clean master state to avoid merging test configuration templates into the main project root.
+*   **Test Harness `README.md`**: Added a new **Latency Benchmarking Architecture** section detailing both the REST API and Web App UI paths. 
+*   **Graphviz DOT Diagrams**: Added the Graphviz sequence flow. The source file is at [architecture.dot](architecture.dot) and the compiled image is at [architecture.png](architecture.png) (compiled using the remote Cloudtop `dot` utility over the active SSH tunnel).
 
----
-
-## 🛠️ 2. Completed Implementations & Branch State
-All updates are committed to the local and remote branch **`feat/test-harness`** on **`origin`** (`GaganKaur/gemini-enterprise-slack-agent`).
-
-### A. Code Enhancements (`src/run_concurrent_benchmark.py`)
-*   **Direct GCP Console Sign-in**: Changed the initial navigation URL to `https://console.cloud.google.com/gen-app-builder/`. Unauthenticated access to the root domain (`vertexaisearch.cloud.google.com/`) results in a 404 error page. Routing through the GCP Console handles authentication redirection, letting the script safely intercept the Configuration ID (`cid`) as the user logs in.
-*   **Expanded Percentiles**: Upgraded statistics calculation from simple averages to compile **P50 (Median)**, **P90**, **P95**, and **P99** distributions for TTFT, TTLT, and generation speed.
-*   **Throughput Telemetry**: Added throughput tracking to measure wall-clock run duration and calculate the average queries per minute (QPM) submitted.
-*   **Complexity Level Integration**: Reports now read and display a `"complexity_level"` attribute directly from the JSON manifest for each scenario (e.g. `Level 2: Single-Connector RAG`).
-
-### B. Manifest Metadata Injection
-*   All JSON manifests (templates and environment configs inside `manifests/`) have been updated to include complexity tags:
-    *   *Q1–Q4*: `Level 2: Single-Connector RAG`
-    *   *Q5–Q7*: `Level 3: Multi-Connector Federated RAG (2 Connectors)`
-    *   *Q8–Q9*: `Level 3: Multi-Connector Federated RAG (3 Connectors)`
-
-### C. Self-Contained Baseline Reference Document
-*   **Relative Asset Paths**: Copied all baseline charts, telemetry database `results.json`, logs, and screenshots into the repository at `tools/test_harness/docs/assets/`.
-*   **Handoff Report**: Regenerated [multi_query_audit_reference.md](file:///usr/local/google/home/thomascummins/Dev/projects/engagements/yahoo/tools/gemini-enterprise-slack-agent/tools/test_harness/docs/multi_query_audit_reference.md) to use relative image URLs and the new report table structure (complexity levels, full percentiles, and scenario timelines for Q1–Q9). It is fully committed to the repository and will render cleanly on GitHub or locally.
-
----
-
-## ⚡ 3. Failed Paths to Avoid
-*   **Root Domain Redirection**: **Do not** attempt to navigate the headless/CDP browser directly to `https://vertexaisearch.cloud.google.com/`. Doing so results in a Google 404 error page if the browser session is unauthenticated. Always direct Playwright/CDP to `https://console.cloud.google.com/gen-app-builder/` first.
-*   **Absolute Image Paths**: Avoid embedding absolute local file system paths (e.g. referencing `.gemini/jetski/brain/` session dirs) in markdown documentation. All reference documents must pull assets from relative paths inside `docs/assets/` to ensure they render correctly on other machines.
-
----
-
-## 🚀 4. How to Resume & Test on your MacBook
-
-1.  **Clone / Pull Branch**:
-    Switch to your MacBook workspace, pull the latest commits, and switch to the branch:
-    ```bash
-    git checkout feat/test-harness
-    git pull origin feat/test-harness
+### B. Duckie MCP Extension Setup
+We successfully enabled **Duckie** and its `ask_duckie` tool for the Jetski environment by linking to your local CITC workspace:
+1.  **Modified configuration**: Modified [gemini-extension.json](file:///google/src/cloud/thomascummins/mighty-duckies/google3/devtools/devassist/ml4answers/gemini_cli/duckie/gemini-extension.json) to use a bash wrapper executing `blaze run` inside your mounted workspace:
+    ```json
+    "mcpServers": {
+      "DuckieMCP": {
+        "command": "bash",
+        "args": [
+          "-c",
+          "cd /google/src/cloud/thomascummins/mighty-duckies/google3 && blaze run -c opt //devtools/devassist/ml4answers/gemini_cli:duckie_server"
+        ],
+        "timeout": 300000
+      }
+    }
     ```
-2.  **Verify Debugging Port**:
-    If running locally on your MacBook, make sure Chrome is started with remote debugging active:
+2.  **Linked Extension**: Linked your local workspace version:
     ```bash
-    # On macOS Chrome:
-    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+    gemini extensions uninstall duckie
+    gemini extensions link /google/src/cloud/thomascummins/mighty-duckies/google3/devtools/devassist/ml4answers/gemini_cli/duckie/
     ```
-3.  **Run the Smoke Test**:
-    Navigate to `tools/test_harness` and execute the verification script using your active local browser profile:
+3.  **Activation**: A restart of the Jetski IDE will reload the MCP settings and activate the `ask_duckie` tool.
+
+---
+
+## 2. Key Discoveries (Port Conflicts & macOS Single-Instance Lock)
+
+### A. Google Drive Port Conflict
+During local testing, we encountered hangs when trying to connect to Chrome on remote debugging port `7679`. 
+*   **Discovery**: Port `7679` is bound exclusively by **Google Drive** (`/Applications/Google Drive.app/Contents/MacOS/Google Drive`) on macOS for its internal process communication. 
+*   **Remediation**: Do **NOT** use port `7679` for Chrome debugging on macOS. Switch to a standard free port like `9222`.
+
+### B. Chrome Single-Instance Lock
+*   **Discovery**: On macOS, if you have your personal Google Chrome app running, launching Chrome from the terminal with `--remote-debugging-port` will silently delegate to the existing running process without opening the debugging port.
+*   **Remediation**: You must launch Chrome specifying a separate user data directory to force a new, independent debugging instance (e.g. `--user-data-dir="/Users/thomascummins/.gemini/antigravity-browser-profile"`).
+
+---
+
+## 3. Recommended Next Steps (For Resuming on Cloudtop)
+
+Since you are transitioning testing to your remote **Cloudtop VM**, you will have access to full gLinux utilities and will not face macOS security/profile locks.
+
+### Step 0: Test the Chrome Remote Desktop (CRD) Native Workflow
+To prepare this benchmarking harness for final delivery to the Yahoo team, we must validate a simplified, native desktop setup that does **not** rely on SSH port forwarding to your local MacBook.
+
+**Workflow to test**:
+1.  **Human Action**: Open a **Chrome Remote Desktop (CRD)** session to your Cloudtop VM to get a GUI desktop environment.
+2.  **Human Action**: In the CRD terminal, launch Google Chrome natively with debugging active:
     ```bash
-    PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
-      --manifest=manifests/thomas_test_environment/verify_manifest.json \
+    google-chrome --remote-debugging-port=9222 --user-data-dir=$HOME/.gemini/antigravity-browser-profile
+    ```
+    *(Authenticate with the Argolis console in that window if needed.)*
+3.  **Agent Action**: Run the test harness locally on the Cloudtop VM targeting `http://localhost:9222`. Since both Chrome and the harness are running on the same VM, they will connect seamlessly without any SSH tunnel complexity.
+
+### Step 1: Push Local Changes
+Commit and push the local harness documentation changes:
+```bash
+git add tools/test_harness/README.md tools/test_harness/architecture.dot tools/test_harness/architecture.png tools/test_harness/reflective_handoff.md
+git commit -m "docs: Add benchmarking flow diagrams and document debugging setup"
+git push origin <your-branch>
+```
+
+### Step 2: Rerun Verification Smoke Test on Cloudtop
+On your Cloudtop VM terminal:
+1.  Launch Chrome on port `9222` (or connect to your active Chrome instance).
+2.  Run the verification manifest to check the environment:
+    ```bash
+    UV_INDEX_URL=https://pypi.org/simple/ uv --no-config run python -m tools.test_harness.src.run_concurrent_benchmark \
+      --manifest=tools/test_harness/manifests/thomas_test_environment/verify_manifest.json \
       --cdp-url=http://localhost:9222
     ```
-4.  **Confirm Results**:
-    Check the terminal output and open the generated Markdown report `runs/run_<timestamp>_verify/report.md` to verify that execution metadata, complexity levels, percentiles, and embedded charts display correctly.
+
+### Step 3: Run the Latency Benchmark Rerun Manifest
+Once the smoke test completes, execute the rerun manifest containing only the failed scenarios (Q2, Q3, Q8, Q9) with the increased 60-second timeouts:
+```bash
+UV_INDEX_URL=https://pypi.org/simple/ uv --no-config run python -m tools.test_harness.src.run_concurrent_benchmark \
+  --manifest=tools/test_harness/manifests/thomas_test_environment/rerun_manifest.json \
+  --cdp-url=http://localhost:9222
+```

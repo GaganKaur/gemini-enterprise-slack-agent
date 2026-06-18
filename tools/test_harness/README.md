@@ -6,6 +6,14 @@ It enables automated, head-to-head performance evaluations of:
 1.  **Programmatic `streamAssist` REST API** (intent classifier bypass routing).
 2.  **Web App UI Preview Chat** (automated headless browser interactions).
 
+## 📊 Latency Benchmarking Architecture
+
+To evaluate the RAG Search latency profiles across different data connector complexities (Single-Connector vs Multi-Connector Federated RAG), the test harness runs concurrent queries via two distinct pathways.
+
+![Latency Benchmarking Architecture](architecture.png)
+
+*(You can view or edit the source definition in the [Graphviz DOT Source](architecture.dot) file.)*
+
 ---
 
 ## 📋 1. Prerequisites & Environment Prep
@@ -41,18 +49,41 @@ source $HOME/.local/bin/env
 ```
 
 ### C. Browser Environment (Chrome Profile Selection)
+
+> [!WARNING]
+> **No Pre-opened Browser Assumption**  
+> Do **NOT** assume that a Chrome window is already open or authenticated with your target GCP account. You must explicitly verify that:
+> 1. A Google Chrome window is active and visible on your desktop.
+> 2. You are logged into the correct Google Cloud account in that browser profile.
+> 3. If running in CDP mode (`--cdp-url`), Chrome must be explicitly running with remote debugging active and have the Vertex AI Search page open and authenticated.
+
 The UI benchmark runs locally by launching an interactive Chrome window.
 1. **Interactive Login Mode (Default)**:  
    When you start the benchmark runner, it will automatically launch a new Chrome browser window and navigate to the Google Cloud Console (Gen App Builder) sign-in page.
    * You **must** log in using the same account configured in Step A (`<your-corp-email>`).
    * If you have multiple Chrome profiles, ensure you are signing in to the profile associated with that email.
 2. **CDP Option (Optional / Headless VMs)**:  
-   If you are running the test harness on a remote VM, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port (e.g., `9222`):
+   If you are running the test harness on a remote VM, or need to target a specific authenticated Chrome profile (e.g. your corporate Argolis account) when multiple profiles exist, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port and profile directory specified:
+   
+   **How to identify your Chrome Profile Directory**:
+   1. Open the Google Chrome application.
+   2. Switch to the correct Chrome Profile that is logged in to your target Google/Argolis account.
+   3. In that specific profile's window, navigate to `chrome://version/`.
+   4. Locate the **Profile Path** row. For example, you should see an output like this:
+      ```text
+      Google Chrome    149.0.7827.116 (Official Build) (arm64) 
+      Revision         059c64964087769ae0661a8792d569c1cf46f636-refs/branch-heads/7827_102@{#41}
+      OS               macOS Version 26.5.1 (Build 25F80)
+      Profile Path     /Users/thomascummins/Library/Application Support/Google/Chrome/Profile 1
+      ```
+   5. The folder at the end of the path (e.g., `Profile 1`) is your profile directory name.
+   
+   **Launch Chrome on macOS with port and profile parameters**:
    ```bash
-   # Start Chrome with remote debugging active (e.g. on macOS)
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+   # Start Chrome with remote debugging active and your chosen profile selected
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --profile-directory="Profile 1"
    ```
-   *Note: `9222` is just an example port. You can choose any free port (e.g., `9333`) as long as you match it when passing `--cdp-url` to the benchmark runner script. Additionally, make sure you launch this debugging session under the Chrome profile containing your active Google Cloud Console credentials.*
+   *Note: `9222` is just an example port. You can choose any free port (e.g., `7679`) as long as you match it when passing `--cdp-url` to the benchmark runner script.*
 
 ---
 

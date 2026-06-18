@@ -1,0 +1,112 @@
+{
+  "manifest_version": "1.0.0",
+  "test_id": "002_rerun",
+  "description": "Rerun of failed scenarios with increased timeouts",
+  "project_id": "genai-alpha-422116",
+  "engine_id": "yahoo_1780365163254",
+  "query": "what is the company PTO policy?",
+  "iterations": 5,
+  "max_concurrent_calls": 3,
+  "scenarios": [
+    {
+      "name": "Q2. Confluence - VPN Configuration (Stream)",
+      "api": "streamAssist",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration (UI)",
+      "api": "ui",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Jira - Broken Keyboard Status (Stream)",
+      "api": "streamAssist",
+      "query": "What is the status of the Jira ticket regarding broken keyboard replacements?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Jira - Broken Keyboard Status (UI)",
+      "api": "ui",
+      "query": "What is the status of the Jira ticket regarding broken keyboard replacements?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q8. GDrive + Confluence + Jira - Remote Work (Stream)",
+      "api": "streamAssist",
+      "query": "I am setting up my remote home office. What does the Employee Handbook say about flexible remote working hours, how do I set up my remote VPN access from Confluence, and is there any active Jira ticket tracking VPN connection errors?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q8. GDrive + Confluence + Jira - Remote Work (UI)",
+      "api": "ui",
+      "query": "I am setting up my remote home office. What does the Employee Handbook say about flexible remote working hours, how do I set up my remote VPN access from Confluence, and is there any active Jira ticket tracking VPN connection errors?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q9. 3-Way IT Checklist (Stream)",
+      "api": "streamAssist",
+      "query": "Assemble an IT support checklist for Gemini Enterprise: What is the target latency from the LumApps rollout guidelines, what laptop replacement rules are defined in the Confluence IT policy, and are there any active keyboard or workspace Jira tickets blocking developers?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q9. 3-Way IT Checklist (UI)",
+      "api": "ui",
+      "query": "Assemble an IT support checklist for Gemini Enterprise: What is the target latency from the LumApps rollout guidelines, what laptop replacement rules are defined in the Confluence IT policy, and are there any active keyboard or workspace Jira tickets blocking developers?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    }
+  ]
+}

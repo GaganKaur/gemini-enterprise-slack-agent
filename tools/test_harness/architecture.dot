@@ -1,0 +1,39 @@
+digraph LatencyBenchmarkingHarnessFlow {
+    rankdir=LR;
+    node [shape=box, style="filled,rounded", color="#1a73e8", fontcolor=white, fontname="Helvetica", fontsize=10];
+    edge [fontname="Helvetica", fontsize=9];
+
+    subgraph cluster_local {
+        label="Local MacBook / Test Environment";
+        style="filled,dashed";
+        color="#f1f3f4";
+        Runner [label="run_concurrent_benchmark.py", fillcolor="#4285f4"];
+        Playwright [label="Playwright Client", fillcolor="#34a853"];
+        Chrome [label="Google Chrome App", fillcolor="#fbbc05", fontcolor=black];
+        RESTClient [label="REST API Client", fillcolor="#ea4335"];
+    }
+
+    subgraph cluster_gcp {
+        label="Google Cloud Platform";
+        style="filled,dashed";
+        color="#e8eaed";
+        VertexUI [label="Vertex AI Search Console UI", fillcolor="#673ab7"];
+        DiscoveryAPI [label="Discovery Engine API", fillcolor="#9c27b0"];
+        RAGConnectors [label="Federated Connectors\n(GDrive / Jira / Confluence)", fillcolor="#607d8b"];
+    }
+
+    # Web App UI Flow
+    Runner -> Playwright [label="1. Connect CDP", color="#34a853"];
+    Playwright -> Chrome [label="2. Drive UI", color="#34a853"];
+    Chrome -> VertexUI [label="3. Load page & type query", color="#34a853"];
+    VertexUI -> RAGConnectors [label="4. Retrieve documents", color="#34a853"];
+    VertexUI -> Chrome [label="5. Stream UI tokens", style=dashed, color="#34a853"];
+    Playwright -> Runner [label="6. Measure UI Latency", style=dashed, color="#34a853"];
+
+    # REST API Flow
+    Runner -> RESTClient [label="1. Send POST request with ADC", color="#ea4335"];
+    RESTClient -> DiscoveryAPI [label="2. POST :streamAssist", color="#ea4335"];
+    DiscoveryAPI -> RAGConnectors [label="3. Retrieve documents", color="#ea4335"];
+    DiscoveryAPI -> RESTClient [label="4. Stream API chunks", style=dashed, color="#ea4335"];
+    RESTClient -> Runner [label="5. Measure API Latency", style=dashed, color="#ea4335"];
+}

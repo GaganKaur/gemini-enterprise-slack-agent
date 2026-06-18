@@ -5,12 +5,16 @@ import uuid
 import httpx
 import google.auth
 import os
+import sys
 import datetime
 import argparse
 import traceback
 import re
 from google.auth.transport.requests import Request
 from playwright.async_api import async_playwright
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 
 def get_credentials():
     credentials, project = google.auth.default(
@@ -241,8 +245,8 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
                     trace_id = trace_context.split("/")[0]
         
         page.on("request", handle_request)
-        await page.goto(base_url)
-        await page.wait_for_selector(".ProseMirror", timeout=30000)
+        await page.goto(base_url, timeout=60000)
+        await page.wait_for_selector(".ProseMirror", timeout=60000)
         
         # Click the Preview tab button ONLY if it exists in the header shadow DOM
         click_preview_tab_js = """
