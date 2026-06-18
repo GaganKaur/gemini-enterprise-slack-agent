@@ -63,27 +63,54 @@ The UI benchmark runs locally by launching an interactive Chrome window.
    * You **must** log in using the same account configured in Step A (`<your-corp-email>`).
    * If you have multiple Chrome profiles, ensure you are signing in to the profile associated with that email.
 2. **CDP Option (Optional / Headless VMs)**:  
-   If you are running the test harness on a remote VM, or need to target a specific authenticated Chrome profile (e.g. your corporate Argolis account) when multiple profiles exist, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port and profile directory specified:
-   
-   **How to identify your Chrome Profile Directory**:
-   1. Open the Google Chrome application.
-   2. Switch to the correct Chrome Profile that is logged in to your target Google/Argolis account.
-   3. In that specific profile's window, navigate to `chrome://version/`.
-   4. Locate the **Profile Path** row. For example, you should see an output like this:
-      ```text
-      Google Chrome    149.0.7827.116 (Official Build) (arm64) 
-      Revision         059c64964087769ae0661a8792d569c1cf46f636-refs/branch-heads/7827_102@{#41}
-      OS               macOS Version 26.5.1 (Build 25F80)
-      Profile Path     /Users/thomascummins/Library/Application Support/Google/Chrome/Profile 1
-      ```
-   5. The folder at the end of the path (e.g., `Profile 1`) is your profile directory name.
-   
-   **Launch Chrome on macOS with port and profile parameters**:
+   If you are running the test harness on a remote VM, or need to target a specific authenticated Chrome profile when multiple profiles exist, you can connect to an already active local Chrome session instead by launching Chrome with a remote debugging port enabled.
+
+   > [!NOTE]
+   > **Default Profile Constraint / Custom Directories**:  
+   > Many environments (including corporate gLinux VMs) restrict remote debugging on the default user profile. You must specify either a dedicated debugging profile directory (via `--user-data-dir`) or a specific profile directory (via `--profile-directory`).
+
+   ### Option A: Launch with a dedicated debug profile directory (Recommended for gLinux VMs)
+   Run the appropriate command for your operating system:
+
+   **macOS**:
    ```bash
-   # Start Chrome with remote debugging active and your chosen profile selected
-   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --profile-directory="Profile 1"
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9223 --user-data-dir=$HOME/Library/Application\ Support/Google/Chrome-Debug
    ```
-   *Note: `9222` is just an example port. You can choose any free port (e.g., `7679`) as long as you match it when passing `--cdp-url` to the benchmark runner script.*
+
+   **Linux (Ubuntu/gLinux)**:
+   ```bash
+   google-chrome --remote-debugging-port=9223 --user-data-dir=$HOME/.config/google-chrome-debug
+   ```
+
+   **Windows (Command Prompt)**:
+   ```cmd
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9223 --user-data-dir="%LOCALAPPDATA%\Google\Chrome-Debug"
+   ```
+
+   **Windows (PowerShell)**:
+   ```powershell
+   Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--remote-debugging-port=9223", "--user-data-dir=$env:LOCALAPPDATA\Google\Chrome-Debug"
+   ```
+
+   ### Option B: Launch with a specific existing Chrome Profile
+   If you want to reuse an existing profile containing your credentials, you must resolve its directory path:
+   1. Open Google Chrome.
+   2. Switch to the correct Chrome Profile that is logged in to your target Google/Argolis account.
+   3. Navigate to `chrome://version/`.
+   4. Locate the **Profile Path** row. The folder name at the very end of the path (e.g., `Profile 1` or `Default`) is your profile directory name.
+   5. Launch Chrome using `--profile-directory` and `--user-data-dir` (parent directory of your profile path):
+      ```bash
+      # macOS Example (targeting Profile 1):
+      /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9223 --user-data-dir="$HOME/Library/Application Support/Google/Chrome" --profile-directory="Profile 1"
+      ```
+
+   *Note: `9223` is the recommended port (since `9222` is often used by SSH tunneling). You can choose any free port as long as you match it when passing `--cdp-url` to the benchmark runner script.*
+
+   > [!IMPORTANT]
+   > **CDP Authentication & Google Login Alignment**  
+   > When Chrome launches via the remote debugging port, you may be prompted to log in to your Google account in the browser window if you are not already signed in.
+   > 
+   > You **must** log in using the exact same Google account that is authenticated in your terminal's `gcloud` profile (from Step A). Discrepancies between your CLI auth credentials and the active browser session will lead to benchmark failures, as both the REST API (using ADC) and the Web App UI preview automation must access the same GCP project and Vertex AI Search / Gemini Enterprise agent resources.
 
 ---
 
@@ -128,7 +155,7 @@ Before executing the full benchmark suite, run a single-iteration smoke test to 
    # REMOTE VM RUN (CDP Mode - connects to your active browser window)
    PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
      --manifest=manifests/yahoo_environment/verify_manifest.json \
-     --cdp-url=http://localhost:9222
+     --cdp-url=http://localhost:9223
    ```
 
 #### 🛡️ Expected Smoke Test Results:
@@ -164,7 +191,7 @@ Once the smoke test completes successfully, you are ready to kick off the full b
    # REMOTE VM RUN (CDP Mode)
    PYTHONPATH=src uv run python3 src/run_concurrent_benchmark.py \
      --manifest=manifests/yahoo_environment/manifest_multi_query.json \
-     --cdp-url=http://localhost:9222
+     --cdp-url=http://localhost:9223
    ```
 2. This runs **5 iterations** across **9 unique scenarios** for both REST API and Web UI (90 total requests). It may take 10 to 15 minutes to complete depending on network conditions.
 3. The results will be aggregated inside a master report at `runs/run_<timestamp>_002/report.md`.

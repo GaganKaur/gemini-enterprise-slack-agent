@@ -1,3 +1,12 @@
+# /// script
+# dependencies = [
+#   "playwright>=1.40.0",
+#   "httpx>=0.25.0",
+#   "google-auth>=2.23.0",
+#   "matplotlib>=3.8.0",
+#   "numpy>=1.26.0",
+# ]
+# ///
 import asyncio
 import json
 import time
@@ -223,7 +232,7 @@ async def run_async_sync_test(client, credentials, project_id, engine_id, scenar
             "trace_id": trace_id
         }
 
-async def run_ui_test(context, base_url, query_text, run_id, run_dir):
+async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_name="ui"):
     page = None
     console_logs = []
     status_code = 200
@@ -248,6 +257,48 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
         await page.goto(base_url, timeout=60000)
         await page.wait_for_selector(".ProseMirror", timeout=60000)
         
+        # Check and dismiss welcome modal if present
+        dismiss_modal_js = """
+        () => {
+            const findTextInShadows = (root, text) => {
+                const all = root.querySelectorAll('*');
+                for (const el of all) {
+                    if (el.textContent.trim().toLowerCase() === text.toLowerCase()) {
+                        let hasChildMatch = false;
+                        for (const child of el.children) {
+                            if (child.textContent.trim().toLowerCase() === text.toLowerCase()) {
+                                hasChildMatch = true;
+                                break;
+                            }
+                        }
+                        if (el.shadowRoot) {
+                            const found = findTextInShadows(el.shadowRoot, text);
+                            if (found) return found;
+                        }
+                        if (!hasChildMatch) {
+                            return el;
+                        }
+                    }
+                    if (el.shadowRoot) {
+                        const found = findTextInShadows(el.shadowRoot, text);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            const btn = findTextInShadows(document, "Get started");
+            if (btn) {
+                btn.click();
+                return true;
+            }
+            return false;
+        }
+        """
+        dismissed = await page.evaluate(dismiss_modal_js)
+        if dismissed:
+            await asyncio.sleep(2.0)
+
         # Click the Preview tab button ONLY if it exists in the header shadow DOM
         click_preview_tab_js = """
         () => {
@@ -278,9 +329,17 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
         if did_click:
             # Wait for the preview panel to animate open and load
             await asyncio.sleep(2.0)
+
+        # Focus and natively fill query using Playwright to trigger framework states correctly (handles concurrency focus isolation)
+        input_locator = page.locator(".ProseMirror")
+        await input_locator.fill(query_text)
         
-        js_func = """
-        async (query) => {
+        # Resolve target send button
+        send_locator = page.locator("md-icon-button.send-button")
+        await send_locator.wait_for(state="visible", timeout=10000)
+
+        poll_js = """
+        () => {
             const findInShadows = (root, selector) => {
                 const el = root.querySelector(selector);
                 if (el) return el;
@@ -294,55 +353,46 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
                 return null;
             };
 
-            const previewContainer = findInShadows(document, 'ucs-agent-builder-preview');
-            const searchRoot = previewContainer ? previewContainer.shadowRoot : document;
+            const getTurnsCount = () => {
+                const conversation = findInShadows(document, 'ucs-conversation');
+                const mainDiv = conversation ? conversation.shadowRoot.querySelector('.main') : null;
+                const turns = mainDiv ? mainDiv.querySelectorAll('.turn') : [];
+                return turns.length;
+            };
 
-            const pm = findInShadows(searchRoot, '.ProseMirror');
-            if (!pm) return { error: 'Input box not found' };
-
-            pm.focus();
-            document.execCommand('selectAll', false, null);
-            document.execCommand('delete', false, null);
-            document.execCommand('insertText', false, query);
-            pm.dispatchEvent(new Event('input', { bubbles: true }));
-
-            let sendBtn = findInShadows(searchRoot, 'md-icon-button.send-button');
-            let innerBtn = sendBtn ? sendBtn.shadowRoot.querySelector('button') : null;
-            let attempts = 0;
-            while ((!innerBtn || innerBtn.disabled) && attempts < 20) {
-                await new Promise(r => setTimeout(r, 50));
-                sendBtn = findInShadows(searchRoot, 'md-icon-button.send-button');
-                innerBtn = sendBtn ? sendBtn.shadowRoot.querySelector('button') : null;
-                attempts++;
+            const initialTurnsCount = getTurnsCount();
+            const sendBtn = findInShadows(document, 'md-icon-button.send-button');
+            
+            let clickTime = null;
+            if (sendBtn) {
+                sendBtn.addEventListener('click', () => {
+                    clickTime = performance.now();
+                }, { once: true });
             }
-
-            if (!innerBtn || innerBtn.disabled) {
-                return { error: 'Send button remained disabled after typing' };
-            }
-
-            const startTime = performance.now();
-            innerBtn.click();
 
             return new Promise((resolve) => {
                 let ttft = null;
                 let ttlt = null;
                 let lastText = "";
                 let lastChangeTime = performance.now();
+                const startTime = performance.now();
+                const getStartTime = () => clickTime || startTime;
                 const pollInterval = 50;
                 const timeoutLimit = 90000;
 
                 const check = setInterval(() => {
-                    const elapsed = performance.now() - startTime;
+                    const tStart = getStartTime();
+                    const elapsed = performance.now() - tStart;
                     if (elapsed > timeoutLimit) {
                         clearInterval(check);
-                        resolve({ error: 'Timeout waiting for response', ttft, partial_ttlt: (performance.now() - startTime) / 1000 });
+                        resolve({ error: 'Timeout waiting for response', ttft, partial_ttlt: (performance.now() - tStart) / 1000 });
                         return;
                     }
 
-                    const conversation = findInShadows(searchRoot, 'ucs-conversation');
+                    const conversation = findInShadows(document, 'ucs-conversation');
                     const mainDiv = conversation ? conversation.shadowRoot.querySelector('.main') : null;
                     const currentTurns = mainDiv ? mainDiv.querySelectorAll('.turn') : [];
-                    if (currentTurns.length <= 0) {
+                    if (currentTurns.length <= initialTurnsCount) {
                         return;
                     }
 
@@ -354,7 +404,7 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
                     const text = markdownDoc ? markdownDoc.innerText.trim() : "";
 
                     if (text.length > 0 && ttft === null) {
-                        ttft = (performance.now() - startTime) / 1000;
+                        ttft = (performance.now() - tStart) / 1000;
                     }
 
                     if (text !== lastText) {
@@ -367,14 +417,22 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
 
                     if (text.length > 0 && (footerVisible || noChangeElapsed > 3000)) {
                         clearInterval(check);
-                        ttlt = (lastChangeTime - startTime) / 1000;
+                        ttlt = (lastChangeTime - tStart) / 1000;
                         resolve({ ttft, ttlt, text_length: text.length, text });
                     }
                 }, pollInterval);
             });
         }
         """
-        res = await page.evaluate(js_func, query_text)
+        # Start background polling promise in browser context
+        poll_task = asyncio.create_task(page.evaluate(poll_js))
+        await asyncio.sleep(0.1) # tiny sleep to ensure event listener binds
+        
+        # Click the send button natively
+        await send_locator.click()
+        
+        # Wait for resolution of the polling task
+        res = await poll_task
         
         # Wait briefly for trace ID
         await asyncio.sleep(1.0)
@@ -387,11 +445,17 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
         with open(log_path, "w") as lf:
             lf.write("\n".join(console_logs))
             
+        from chart_generator import slugify
+        slug = slugify(scenario_name)
+
         if "error" in res:
             status_code = 500
-            err_path = f"{run_dir}/screenshots/ui_error_{run_id}.png"
+            err_path = f"{run_dir}/screenshots/{slug}_error_{run_id}.png"
             os.makedirs(os.path.dirname(err_path), exist_ok=True)
-            await page.screenshot(path=err_path)
+            try:
+                await page.screenshot(path=err_path, timeout=10000)
+            except Exception as e:
+                print(f"Warning: Failed to capture error screenshot for run {run_id} ({slug}): {e}")
             await page.close()
             return {
                 "status_code": status_code,
@@ -403,11 +467,15 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
                 "trace_id": trace_id or "N/A"
             }
             
-        # Capture success screenshot
-        shot_path = f"screenshots/ui_run_{run_id}.png"
+        # Capture success screenshot (safely wrapped to prevent screenshot rendering timeouts from failing the scenario)
+        shot_path = f"screenshots/{slug}_run_{run_id}.png"
         abs_shot_path = f"{run_dir}/{shot_path}"
         os.makedirs(os.path.dirname(abs_shot_path), exist_ok=True)
-        await page.screenshot(path=abs_shot_path)
+        try:
+            await page.screenshot(path=abs_shot_path, timeout=10000)
+        except Exception as e:
+            print(f"Warning: Failed to capture success screenshot for run {run_id} ({slug}): {e}")
+            shot_path = None
         await page.close()
         
         response_text = res.get("text", "")
@@ -429,9 +497,11 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir):
         status_code = 500
         if page:
             try:
-                err_path = f"{run_dir}/screenshots/ui_error_catch_{run_id}.png"
+                from chart_generator import slugify
+                slug = slugify(scenario_name)
+                err_path = f"{run_dir}/screenshots/{slug}_error_catch_{run_id}.png"
                 os.makedirs(os.path.dirname(err_path), exist_ok=True)
-                await page.screenshot(path=err_path)
+                await page.screenshot(path=err_path, timeout=10000)
                 await page.close()
             except Exception:
                 pass
@@ -457,7 +527,7 @@ async def worker(semaphore, context, base_url, client, credentials, project_id, 
             scenario_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}/r/agent/{target_agent_id}/session/-?hl=en_US"
             
         async with semaphore:
-            res = await run_ui_test(context, scenario_url, query, run_id, run_dir)
+            res = await run_ui_test(context, scenario_url, query, run_id, run_dir, scenario.get("name", "ui"))
             res["run_id"] = run_id
             res["api"] = "ui (CDP)"
             res["skipping_mode"] = "REQUEST_ASSIST"
@@ -518,8 +588,26 @@ async def main_async(manifest_path, cdp_url=None):
                         base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
                         break
             if not base_url:
-                print("ERROR: Active Vertex AI Search page tab not found over CDP. Make sure Chrome with remote debugging is running.")
-                return
+                print("Active Vertex AI Search tab not found. Opening a new tab to resolve Configuration ID...")
+                page = await context.new_page()
+                await page.goto("https://console.cloud.google.com/gen-app-builder/")
+                
+                cid = None
+                start_auth_time = time.time()
+                # Poll for Configuration ID in the URL for up to 90s (in case login is needed)
+                while time.time() - start_auth_time < 90:
+                    url = page.url
+                    match = re.search(r"/cid/([^/?#]+)", url)
+                    if match:
+                        cid = match.group(1)
+                        break
+                    await asyncio.sleep(1)
+                    
+                if not cid:
+                    print("ERROR: Active Vertex AI Search tab not found and could not resolve Configuration ID from redirect.")
+                    return
+                base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
+                print(f"Successfully resolved Configuration ID: {cid}")
         else:
             print("Launching new interactive browser instance...")
             # Launch local Chrome / Chromium headfully
