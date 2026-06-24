@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 scratch/
+
+# Ignore local/personal test configurations
+config/thomas_test_environment/
