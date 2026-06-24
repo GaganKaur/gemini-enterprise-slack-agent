@@ -7,21 +7,23 @@
 
 ## How to execute `uv` commands in this workspace
 
-Because the system-wide `/etc/uv/uv.toml` configuration forces the use of the corporate Airlock staging registry, all `uv` commands must be run with the `--no-config` flag and the `UV_INDEX_URL` environment variable set to the public PyPI simple registry.
+For the test harness, we have defined the public PyPI registry directly inside `tools/test_harness/pyproject.toml` under `[tool.uv]`. This local configuration automatically overrides the system-wide Airlock staging registry.
+
+Therefore, when working inside the `tools/test_harness/` directory, you can run standard, clean `uv` commands without any environment variable prefix or `--no-config` flag:
 
 ### Installation / Syncing Dependencies
 ```bash
-UV_INDEX_URL=https://pypi.org/simple/ uv --no-config sync
+uv sync
 ```
 
 ### Running Scripts or Modules
 ```bash
-UV_INDEX_URL=https://pypi.org/simple/ uv --no-config run python -m ...
+uv run src/run_concurrent_benchmark.py --manifest ... --cdp ...
 ```
 
 ### Adding New Packages
 ```bash
-UV_INDEX_URL=https://pypi.org/simple/ uv --no-config add <package>
+uv add <package>
 ```
 
 ## Diagram Conventions

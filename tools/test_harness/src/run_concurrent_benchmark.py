@@ -3,8 +3,10 @@
 #   "playwright>=1.40.0",
 #   "httpx>=0.25.0",
 #   "google-auth>=2.23.0",
+#   "requests>=2.31.0",
 #   "matplotlib>=3.8.0",
 #   "numpy>=1.26.0",
+#   "rich>=13.0.0",
 # ]
 # ///
 import asyncio
@@ -21,6 +23,10 @@ import traceback
 import re
 from google.auth.transport.requests import Request
 from playwright.async_api import async_playwright
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.markdown import Markdown
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,6 +38,15 @@ def get_credentials():
     if not credentials.valid:
         credentials.refresh(Request())
     return credentials
+
+
+def get_git_root():
+    current = os.path.dirname(os.path.abspath(__file__))
+    while current != os.path.dirname(current):
+        if os.path.exists(os.path.join(current, ".git")):
+            return current
+        current = os.path.dirname(current)
+    return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../../"))
 
 def get_stats(data_list):
     if not data_list:
@@ -51,16 +66,25 @@ def get_stats(data_list):
     s_p99 = get_percentile(0.99)
     return s_min, s_p50, s_p90, s_p95, s_p99, s_max, s_avg
 
-async def run_async_stream_test(client, credentials, project_id, engine_id, scenario, query_text):
+async def run_async_stream_test(client, credentials, project_id, engine_id, scenario, query_text, quota_project_id=None):
     base_url = "https://discoveryengine.googleapis.com/v1alpha"
     url = f"{base_url}/projects/{project_id}/locations/global/collections/default_collection/engines/{engine_id}/assistants/default_assistant:streamAssist"
     
+    user_project = quota_project_id if quota_project_id else project_id
     trace_id = uuid.uuid4().hex
+    
+    # Generate random 64-bit Span ID for root span correlation
+    import random
+    span_id_val = random.randint(1, 2**64 - 1)
+    span_id_dec = str(span_id_val)
+    span_id_hex = format(span_id_val, '016x')
+    
     headers = {
         "Authorization": f"Bearer {credentials.token}",
         "Content-Type": "application/json",
-        "X-Goog-User-Project": project_id,
-        "x-cloud-trace-context": f"{trace_id}/0;o=1"
+        "X-Goog-User-Project": user_project,
+        "x-cloud-trace-context": f"{trace_id}/{span_id_dec};o=1",
+        "traceparent": f"00-{trace_id}-{span_id_hex}-01"
     }
     payload = {
         "query": {"text": query_text},
@@ -88,6 +112,21 @@ async def run_async_stream_test(client, credentials, project_id, engine_id, scen
         }
         if scenario.get("skip_classifier", True):
             payload["assistSkippingMode"] = "REQUEST_ASSIST"
+            
+    # Resolve and inject model override if specified
+    model_used_attr = scenario.get("model_used")
+    model_id = scenario.get("model_id")
+    if not model_id and model_used_attr:
+        if "3.5 Flash" in model_used_attr or "3.5-flash" in model_used_attr.lower():
+            model_id = "gemini-3.5-flash"
+        elif "3.1 Pro" in model_used_attr or "3.1-pro" in model_used_attr.lower():
+            model_id = "gemini-3.1-pro-preview"
+        else:
+            model_id = model_used_attr
+    if model_id:
+        payload["generationSpec"] = {
+            "modelId": model_id
+        }
         
     start_time = time.time()
     ttft = None
@@ -106,7 +145,8 @@ async def run_async_stream_test(client, credentials, project_id, engine_id, scen
                     "ttlt": time.time() - start_time,
                     "response_text": "",
                     "generation_speed": 0.0,
-                    "trace_id": trace_id
+                    "trace_id": trace_id,
+                    "span_id": span_id_hex
                 }
                 
             buffer = ""
@@ -148,6 +188,7 @@ async def run_async_stream_test(client, credentials, project_id, engine_id, scen
             "ttft": ttft,
             "ttlt": end_time,
             "trace_id": trace_id,
+            "span_id": span_id_hex,
             "response_text": response_text,
             "generation_speed": generation_speed,
             "error": None
@@ -160,19 +201,29 @@ async def run_async_stream_test(client, credentials, project_id, engine_id, scen
             "ttlt": time.time() - start_time,
             "response_text": "",
             "generation_speed": 0.0,
-            "trace_id": trace_id
+            "trace_id": trace_id,
+            "span_id": span_id_hex
         }
 
-async def run_async_sync_test(client, credentials, project_id, engine_id, scenario, query_text):
+async def run_async_sync_test(client, credentials, project_id, engine_id, scenario, query_text, quota_project_id=None):
     base_url = "https://discoveryengine.googleapis.com/v1alpha"
     url = f"{base_url}/projects/{project_id}/locations/global/collections/default_collection/engines/{engine_id}/assistants/default_assistant:assist"
     
+    user_project = quota_project_id if quota_project_id else project_id
     trace_id = uuid.uuid4().hex
+    
+    # Generate random 64-bit Span ID for root span correlation
+    import random
+    span_id_val = random.randint(1, 2**64 - 1)
+    span_id_dec = str(span_id_val)
+    span_id_hex = format(span_id_val, '016x')
+    
     headers = {
         "Authorization": f"Bearer {credentials.token}",
         "Content-Type": "application/json",
-        "X-Goog-User-Project": project_id,
-        "x-cloud-trace-context": f"{trace_id}/0;o=1"
+        "X-Goog-User-Project": user_project,
+        "x-cloud-trace-context": f"{trace_id}/{span_id_dec};o=1",
+        "traceparent": f"00-{trace_id}-{span_id_hex}-01"
     }
     payload = {
         "query": {"text": query_text},
@@ -184,6 +235,21 @@ async def run_async_sync_test(client, credentials, project_id, engine_id, scenar
         # Fallback to defaults
         if scenario.get("skip_classifier", True):
             payload["assistSkippingMode"] = "REQUEST_ASSIST"
+            
+    # Resolve and inject model override if specified
+    model_used_attr = scenario.get("model_used")
+    model_id = scenario.get("model_id")
+    if not model_id and model_used_attr:
+        if "3.5 Flash" in model_used_attr or "3.5-flash" in model_used_attr.lower():
+            model_id = "gemini-3.5-flash"
+        elif "3.1 Pro" in model_used_attr or "3.1-pro" in model_used_attr.lower():
+            model_id = "gemini-3.1-pro-preview"
+        else:
+            model_id = model_used_attr
+    if model_id:
+        payload["generationSpec"] = {
+            "modelId": model_id
+        }
         
     start_time = time.time()
     status_code = None
@@ -200,7 +266,8 @@ async def run_async_sync_test(client, credentials, project_id, engine_id, scenar
                 "ttlt": end_time,
                 "response_text": "",
                 "generation_speed": 0.0,
-                "trace_id": trace_id
+                "trace_id": trace_id,
+                "span_id": span_id_hex
             }
             
         res_json = response.json()
@@ -217,6 +284,7 @@ async def run_async_sync_test(client, credentials, project_id, engine_id, scenar
             "ttft": None,
             "ttlt": end_time,
             "trace_id": trace_id,
+            "span_id": span_id_hex,
             "response_text": response_text,
             "generation_speed": generation_speed,
             "error": None
@@ -229,10 +297,11 @@ async def run_async_sync_test(client, credentials, project_id, engine_id, scenar
             "ttlt": time.time() - start_time,
             "response_text": "",
             "generation_speed": 0.0,
-            "trace_id": trace_id
+            "trace_id": trace_id,
+            "span_id": span_id_hex
         }
 
-async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_name="ui"):
+async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_name="ui", model_name=None):
     page = None
     console_logs = []
     status_code = 200
@@ -247,11 +316,18 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
         trace_id = None
         async def handle_request(req):
             nonlocal trace_id
-            if "assistants/default_assistant:" in req.url:
-                headers = await req.all_headers()
-                trace_context = headers.get("x-cloud-trace-context", "")
-                if trace_context:
-                    trace_id = trace_context.split("/")[0]
+            if "discoveryengine" in req.url or "assist" in req.url or "engines/" in req.url:
+                try:
+                    headers = await req.all_headers()
+                    trace_context = headers.get("x-cloud-trace-context", "")
+                    if trace_context:
+                        trace_id = trace_context.split("/")[0]
+                    post_data = req.post_data
+                    print(f"[DEBUG] Intercepted UI request URL: {req.url}")
+                    if post_data:
+                        print(f"[DEBUG] Intercepted UI post data: {post_data}")
+                except Exception:
+                    pass
         
         page.on("request", handle_request)
         await page.goto(base_url, timeout=60000)
@@ -329,6 +405,93 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
         if did_click:
             # Wait for the preview panel to animate open and load
             await asyncio.sleep(2.0)
+
+        if model_name:
+            print(f"Selecting model '{model_name}' in Web UI...")
+            select_model_js = f"""
+            async () => {{
+                // Find dropdown button by checking for elements containing current model names (Auto, 3.5 Flash, 3.1 Pro, 2.5 Pro)
+                // and closest to the chat input container
+                const candidates = [];
+                const searchRoot = (root) => {{
+                    const all = root.querySelectorAll('*');
+                    for (const el of all) {{
+                        const text = (el.textContent || '').trim();
+                        const isClickable = el.tagName === 'BUTTON' || el.getAttribute('role') === 'button' || el.classList.contains('clickable') || el.tagName === 'DIV' || el.tagName === 'SPAN';
+                        if (isClickable && (text === 'Auto' || text === '3.5 Flash' || text === '3.1 Pro' || text === '2.5 Pro' || text.includes('Auto ▾') || text.includes('Auto v'))) {{
+                            candidates.push(el);
+                        }}
+                        if (el.shadowRoot) {{
+                            searchRoot(el.shadowRoot);
+                        }}
+                    }}
+                }};
+                searchRoot(document);
+                
+                if (candidates.length === 0) {{
+                    console.log("No dropdown button candidates found.");
+                    return false;
+                }}
+                
+                // Prefer the candidate closest to the ProseMirror input
+                const input = document.querySelector('.ProseMirror');
+                let dropdown = candidates[0];
+                if (input && candidates.length > 1) {{
+                    const inputRect = input.getBoundingClientRect();
+                    candidates.sort((a, b) => {{
+                        const rectA = a.getBoundingClientRect();
+                        const rectB = b.getBoundingClientRect();
+                        const distA = Math.abs(rectA.top - inputRect.top);
+                        const distB = Math.abs(rectB.top - inputRect.top);
+                        return distA - distB;
+                    }});
+                    dropdown = candidates[0];
+                }}
+                
+                dropdown.click();
+                await new Promise(r => setTimeout(r, 800)); // wait for overlay to animate
+                
+                // Find option containing the target model text (strip "Gemini " prefix if present)
+                let targetText = "{model_name}";
+                if (targetText.startsWith("Gemini ")) {{
+                    targetText = targetText.replace("Gemini ", "");
+                }}
+                
+                const findOptionInShadows = (root, checkFn) => {{
+                    const all = root.querySelectorAll('*');
+                    for (const el of all) {{
+                        if (checkFn(el)) return el;
+                        if (el.shadowRoot) {{
+                            const found = findOptionInShadows(el.shadowRoot, checkFn);
+                            if (found) return found;
+                        }}
+                    }}
+                    return null;
+                }};
+                
+                const option = findOptionInShadows(document, (el) => {{
+                    const text = (el.textContent || '').trim();
+                    const isOption = el.tagName === 'MAT-OPTION' || el.getAttribute('role') === 'option' || el.getAttribute('role') === 'menuitem' || el.classList.contains('mat-option') || el.classList.contains('menu-item') || el.tagName === 'DIV' || el.tagName === 'SPAN';
+                    return isOption && text.includes(targetText) && text.length < 100;
+                }});
+                
+                if (!option) {{
+                    dropdown.click(); // dismiss
+                    console.log("Target option not found: " + targetText);
+                    return false;
+                }}
+                
+                option.click();
+                await new Promise(r => setTimeout(r, 800)); // wait for model switch processing
+                return true;
+            }}
+            """
+            success = await page.evaluate(select_model_js)
+            if success:
+                print(f"Successfully configured model '{model_name}' in browser session.")
+                await asyncio.sleep(2.0) # allow UI state to settle
+            else:
+                print(f"Warning: Could not select model '{model_name}' in UI. Defaulting to engine standard.")
 
         # Focus and natively fill query using Playwright to trigger framework states correctly (handles concurrency focus isolation)
         input_locator = page.locator(".ProseMirror")
@@ -438,18 +601,44 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
         await asyncio.sleep(1.0)
         page.remove_listener("request", handle_request)
         
-        # Save console logs to file
-        log_dir = f"{run_dir}/logs"
-        os.makedirs(log_dir, exist_ok=True)
-        log_path = f"{log_dir}/browser_run_{run_id}.log"
-        with open(log_path, "w") as lf:
-            lf.write("\n".join(console_logs))
-            
         from chart_generator import slugify
         slug = slugify(scenario_name)
 
         if "error" in res:
             status_code = 500
+            log_dir = f"{run_dir}/logs"
+            os.makedirs(log_dir, exist_ok=True)
+            log_path = f"{log_dir}/{slug}_run_{run_id}.log"
+            
+            audit_log = []
+            audit_log.append("=========================================")
+            audit_log.append("BROWSER EXECUTION FAILURE AUDIT LOG")
+            audit_log.append("=========================================")
+            audit_log.append(f"Timestamp: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
+            audit_log.append(f"Scenario:  {scenario_name}")
+            audit_log.append(f"Run ID:    {run_id}")
+            audit_log.append(f"Model:     {model_name or 'Auto'}")
+            audit_log.append(f"Status:    500 Internal Error")
+            audit_log.append(f"Error:     {res.get('error')}")
+            audit_log.append(f"TTFT:      {res.get('ttft') or 'N/A'}")
+            audit_log.append(f"TTLT:      {res.get('partial_ttlt') or (time.time() - start_time):.3f} s (partial)")
+            audit_log.append("")
+            audit_log.append("=========================================")
+            audit_log.append("BROWSER CONSOLE LOGS")
+            audit_log.append("=========================================")
+            if console_logs:
+                audit_log.extend(console_logs)
+            else:
+                audit_log.append("(No console messages captured)")
+                
+            try:
+                with open(log_path, "w") as lf:
+                    lf.write("\n".join(audit_log))
+                err_msg = f"{res.get('error')} (Console: {log_path})"
+            except Exception as le:
+                print(f"Warning: Failed to write failure audit log: {le}")
+                err_msg = res.get('error')
+                
             err_path = f"{run_dir}/screenshots/{slug}_error_{run_id}.png"
             os.makedirs(os.path.dirname(err_path), exist_ok=True)
             try:
@@ -459,7 +648,7 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
             await page.close()
             return {
                 "status_code": status_code,
-                "error": f"{res.get('error')} (Console: {log_path})",
+                "error": err_msg,
                 "ttft": res.get("ttft"),
                 "ttlt": res.get("partial_ttlt") or (time.time() - start_time),
                 "response_text": "",
@@ -482,6 +671,43 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
         generation_duration = (res["ttlt"] - res["ttft"]) if (res["ttft"] is not None and res["ttlt"] is not None) else 0.0
         generation_speed = len(response_text) / generation_duration if generation_duration > 0 else 0.0
         
+        # Save structured success audit log to file
+        log_dir = f"{run_dir}/logs"
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = f"{log_dir}/{slug}_run_{run_id}.log"
+        
+        audit_log = []
+        audit_log.append("=========================================")
+        audit_log.append("BROWSER EXECUTION SUCCESS AUDIT LOG")
+        audit_log.append("=========================================")
+        audit_log.append(f"Timestamp: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
+        audit_log.append(f"Scenario:  {scenario_name}")
+        audit_log.append(f"Run ID:    {run_id}")
+        audit_log.append(f"Model:     {model_name or 'Auto'}")
+        audit_log.append(f"Status:    200 OK")
+        audit_log.append(f"TTFT:      {res['ttft']:.3f} s" if res.get('ttft') is not None else "TTFT:      N/A")
+        audit_log.append(f"TTLT:      {res['ttlt']:.3f} s")
+        audit_log.append(f"Speed:     {generation_speed:.1f} char/s")
+        audit_log.append("")
+        audit_log.append("Response Snippet:")
+        audit_log.append("-----------------------------------------")
+        audit_log.append(response_text[:300] + ("..." if len(response_text) > 300 else ""))
+        audit_log.append("-----------------------------------------")
+        audit_log.append("")
+        audit_log.append("=========================================")
+        audit_log.append("BROWSER CONSOLE LOGS")
+        audit_log.append("=========================================")
+        if console_logs:
+            audit_log.extend(console_logs)
+        else:
+            audit_log.append("(No console messages captured)")
+            
+        try:
+            with open(log_path, "w") as lf:
+                lf.write("\n".join(audit_log))
+        except Exception as le:
+            print(f"Warning: Failed to write success audit log: {le}")
+            
         return {
             "status_code": 200,
             "ttft": res["ttft"],
@@ -490,11 +716,44 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
             "response_text": response_text,
             "generation_speed": generation_speed,
             "screenshot_path": shot_path,
-            "console_logs_path": f"logs/browser_run_{run_id}.log",
+            "console_logs_path": f"logs/{slug}_run_{run_id}.log",
             "error": None
         }
     except Exception as e:
         status_code = 500
+        # Save structured exception audit log to file
+        try:
+            log_dir = f"{run_dir}/logs"
+            os.makedirs(log_dir, exist_ok=True)
+            log_path = f"{log_dir}/{slug}_run_{run_id}.log"
+            
+            audit_log = []
+            audit_log.append("=========================================")
+            audit_log.append("BROWSER EXECUTION EXCEPTION AUDIT LOG")
+            audit_log.append("=========================================")
+            audit_log.append(f"Timestamp: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
+            audit_log.append(f"Scenario:  {scenario_name}")
+            audit_log.append(f"Run ID:    {run_id}")
+            audit_log.append(f"Model:     {model_name or 'Auto'}")
+            audit_log.append(f"Status:    500 Internal Error")
+            audit_log.append(f"Exception: {str(e)}")
+            audit_log.append(f"TTLT:      {time.time() - start_time:.3f} s (elapsed)")
+            audit_log.append("")
+            audit_log.append("=========================================")
+            audit_log.append("BROWSER CONSOLE LOGS")
+            audit_log.append("=========================================")
+            if console_logs:
+                audit_log.extend(console_logs)
+            else:
+                audit_log.append("(No console messages captured)")
+                
+            with open(log_path, "w") as lf:
+                lf.write("\n".join(audit_log))
+            error_msg = f"{str(e)} (Console: {log_path})"
+        except Exception as le:
+            print(f"Warning: Failed to write exception audit log: {le}")
+            error_msg = str(e)
+            
         if page:
             try:
                 from chart_generator import slugify
@@ -507,7 +766,7 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
                 pass
         return {
             "status_code": status_code,
-            "error": str(e),
+            "error": error_msg,
             "ttft": None,
             "ttlt": time.time() - start_time,
             "response_text": "",
@@ -515,7 +774,7 @@ async def run_ui_test(context, base_url, query_text, run_id, run_dir, scenario_n
             "trace_id": "N/A"
         }
 
-async def worker(semaphore, context, base_url, client, credentials, project_id, engine_id, scenario, query, run_id, run_dir):
+async def worker(semaphore, context, base_url, client, credentials, project_id, engine_id, scenario, query, run_id, run_dir, quota_project_id=None):
     is_ui = (scenario["api"] == "ui")
     if is_ui:
         target_agent_id = scenario.get("agent_id", "core_assistant")
@@ -527,7 +786,7 @@ async def worker(semaphore, context, base_url, client, credentials, project_id, 
             scenario_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}/r/agent/{target_agent_id}/session/-?hl=en_US"
             
         async with semaphore:
-            res = await run_ui_test(context, scenario_url, query, run_id, run_dir, scenario.get("name", "ui"))
+            res = await run_ui_test(context, scenario_url, query, run_id, run_dir, scenario.get("name", "ui"), scenario.get("model_used"))
             res["run_id"] = run_id
             res["api"] = "ui (CDP)"
             res["skipping_mode"] = "REQUEST_ASSIST"
@@ -536,9 +795,9 @@ async def worker(semaphore, context, base_url, client, credentials, project_id, 
     async with semaphore:
         is_stream = (scenario["api"] == "streamAssist")
         if is_stream:
-            res = await run_async_stream_test(client, credentials, project_id, engine_id, scenario, query)
+            res = await run_async_stream_test(client, credentials, project_id, engine_id, scenario, query, quota_project_id)
         else:
-            res = await run_async_sync_test(client, credentials, project_id, engine_id, scenario, query)
+            res = await run_async_sync_test(client, credentials, project_id, engine_id, scenario, query, quota_project_id)
             res["ttft"] = None
         
         res["run_id"] = run_id
@@ -546,24 +805,45 @@ async def worker(semaphore, context, base_url, client, credentials, project_id, 
         res["skipping_mode"] = "REQUEST_ASSIST" if "REQUEST_ASSIST" in str(scenario) else "UNSPECIFIED"
         return res
 
+def get_scenario_base_name(name):
+    base = name
+    for suffix in [" (Stream)", " (UI)", " (Stream API)", " (UI Preview)"]:
+        if base.endswith(suffix):
+            base = base[:-len(suffix)]
+    if " - Gemini " in base:
+        base = base.split(" - Gemini ")[0]
+    return base
+
 async def main_async(manifest_path, cdp_url=None):
     print(f"Loading configuration manifest: {manifest_path}")
     with open(manifest_path, "r") as f:
         config = json.load(f)
         
     project_id = config["project_id"]
+    quota_project_id = config.get("quota_project_id")
     engine_id = config["engine_id"]
     query = config["query"]
     iterations = config["iterations"]
     max_concurrency = config.get("max_concurrent_calls", 3)
     scenarios = config["scenarios"]
     test_id = config.get("test_id", "unknown")
+    model_used = config.get("model_used", "Gemini 3.5 Flash")
     
     # Create execution runs folder
-    timestamp = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%d_%H%M%S")
     run_dir = f"runs/run_{timestamp}_{test_id}"
     os.makedirs(run_dir, exist_ok=True)
     print(f"Initialized local execution folder: {run_dir}")
+    
+    # Archive the manifest configuration file into the run output folder for provenance
+    import shutil
+    git_root = get_git_root()
+    copied_manifest_filename = f"manifest_{timestamp}.json"
+    copied_manifest_path = os.path.join(run_dir, copied_manifest_filename)
+    shutil.copy2(manifest_path, copied_manifest_path)
+    copied_manifest_abs = os.path.abspath(copied_manifest_path)
+    copied_manifest_git_rel = os.path.relpath(copied_manifest_abs, git_root)
+    print(f"Archived configuration manifest for provenance: {copied_manifest_git_rel}")
     
     print("Resolving credentials...")
     credentials = get_credentials()
@@ -590,21 +870,44 @@ async def main_async(manifest_path, cdp_url=None):
             if not base_url:
                 print("Active Vertex AI Search tab not found. Opening a new tab to resolve Configuration ID...")
                 page = await context.new_page()
-                await page.goto("https://console.cloud.google.com/gen-app-builder/")
+                dashboard_url = f"https://console.cloud.google.com/gemini-enterprise/locations/global/engines/{engine_id}/overview/dashboard?project={project_id}"
+                print(f"Navigating to Gemini Enterprise Dashboard: {dashboard_url}")
+                await page.goto(dashboard_url)
                 
                 cid = None
                 start_auth_time = time.time()
-                # Poll for Configuration ID in the URL for up to 90s (in case login is needed)
+                resolve_cid_js = """
+                () => {
+                    const findLinkInShadows = (root) => {
+                        const link = root.querySelector('a[href*="vertexaisearch.cloud.google.com/home/cid/"]');
+                        if (link) return link.href;
+                        const all = root.querySelectorAll('*');
+                        for (const el of all) {
+                            if (el.shadowRoot) {
+                                const found = findLinkInShadows(el.shadowRoot);
+                                if (found) return found;
+                            }
+                        }
+                        return null;
+                    };
+                    return findLinkInShadows(document);
+                }
+                """
+                # Poll for Configuration ID in the DOM for up to 90s (in case login/redirects are needed)
                 while time.time() - start_auth_time < 90:
-                    url = page.url
-                    match = re.search(r"/cid/([^/?#]+)", url)
-                    if match:
-                        cid = match.group(1)
-                        break
+                    try:
+                        href = await page.evaluate(resolve_cid_js)
+                        if href:
+                            match = re.search(r"/cid/([^/?#]+)", href)
+                            if match:
+                                cid = match.group(1)
+                                break
+                    except Exception:
+                        pass
                     await asyncio.sleep(1)
                     
                 if not cid:
-                    print("ERROR: Active Vertex AI Search tab not found and could not resolve Configuration ID from redirect.")
+                    print("ERROR: Could not resolve Configuration ID from the Gemini Enterprise Dashboard. Exiting.")
                     return
                 base_url = f"https://vertexaisearch.cloud.google.com/home/cid/{cid}?hl=en_US"
                 print(f"Successfully resolved Configuration ID: {cid}")
@@ -615,20 +918,42 @@ async def main_async(manifest_path, cdp_url=None):
             context = await browser.new_context()
             page = await context.new_page()
             
-            print("Navigating to Google Cloud Console (Gen App Builder)...")
-            await page.goto("https://console.cloud.google.com/gen-app-builder/")
+            dashboard_url = f"https://console.cloud.google.com/gemini-enterprise/locations/global/engines/{engine_id}/overview/dashboard?project={project_id}"
+            print(f"Navigating to Gemini Enterprise Dashboard: {dashboard_url}")
+            await page.goto(dashboard_url)
             
-            print("\n>>> Please complete your sign-in to the Vertex AI Search console in the opened browser window...")
+            print("\n>>> Please complete your sign-in to the console in the opened browser window...")
             
             cid = None
             start_auth_time = time.time()
-            # Poll for Customer ID in the URL for up to 120s
+            resolve_cid_js = """
+            () => {
+                const findLinkInShadows = (root) => {
+                    const link = root.querySelector('a[href*="vertexaisearch.cloud.google.com/home/cid/"]');
+                    if (link) return link.href;
+                    const all = root.querySelectorAll('*');
+                    for (const el of all) {
+                        if (el.shadowRoot) {
+                            const found = findLinkInShadows(el.shadowRoot);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+                return findLinkInShadows(document);
+            }
+            """
+            # Poll for Customer ID in the DOM for up to 120s
             while time.time() - start_auth_time < 120:
-                url = page.url
-                match = re.search(r"/cid/([^/?#]+)", url)
-                if match:
-                    cid = match.group(1)
-                    break
+                try:
+                    href = await page.evaluate(resolve_cid_js)
+                    if href:
+                        match = re.search(r"/cid/([^/?#]+)", href)
+                        if match:
+                            cid = match.group(1)
+                            break
+                except Exception:
+                    pass
                 await asyncio.sleep(1)
                 
             if not cid:
@@ -641,6 +966,19 @@ async def main_async(manifest_path, cdp_url=None):
             
         print(f"Resolved base agent URL: {base_url}")
         
+        console = Console()
+        console.print()
+        console.print(Panel(
+            Text("🚀 LAUNCHING LATENCY BENCHMARKING TESTING ENGINE\n"
+                 "Running streamAssist REST API & Web App UI Scenario Testing...",
+                 style="bold white", justify="center"),
+            style="bold cyan",
+            border_style="cyan",
+            title="[bold yellow]BENCHMARKING RUNNING[/bold yellow]",
+            title_align="center"
+        ))
+        console.print()
+        
         total_start_time = time.time()
         async with httpx.AsyncClient(timeout=120.0) as client:
             results = {}
@@ -648,7 +986,7 @@ async def main_async(manifest_path, cdp_url=None):
                 s_name = s["name"]
                 print(f"Scheduling concurrent runs for scenario: {s_name}...")
                 tasks = [
-                    worker(semaphore, context, base_url, client, credentials, project_id, engine_id, s, s.get("query", query), i, run_dir)
+                    worker(semaphore, context, base_url, client, credentials, project_id, engine_id, s, s.get("query", query), i, run_dir, quota_project_id)
                     for i in range(1, iterations + 1)
                 ]
                 scenario_results = await asyncio.gather(*tasks)
@@ -661,9 +999,10 @@ async def main_async(manifest_path, cdp_url=None):
                 
     # Build report output structures
     results_json = {
-        "timestamp": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "test_id": test_id,
-        "manifest_used": manifest_path,
+        "model_used": model_used,
+        "manifest_used": copied_manifest_git_rel,
         "concurrency_limit": max_concurrency,
         "total_duration_seconds": total_duration_s,
         "queries_per_minute": throughput_qpm,
@@ -739,112 +1078,247 @@ async def main_async(manifest_path, cdp_url=None):
         print(f"Warning: Failed to generate charts: {e}")
         chart_links = {}
 
-    # Now, build report.md structure
-    report_md = f"# Latency Audit Report: Test Run {test_id}\n"
-    report_md += f"Executed at: `{results_json['timestamp']}` using manifest: `{manifest_path}`\n\n"
-    report_md += f"## ⚙️ Run Execution Metadata\n"
-    report_md += f"*   **Concurrency Limit**: `{max_concurrency}` simultaneous workers\n"
-    report_md += f"*   **Total Duration**: `{total_duration_s:.1f} seconds` ({duration_minutes:.2f} minutes)\n"
-    report_md += f"*   **Average Throughput**: `{throughput_qpm:.2f} queries per minute` (Volume tracking)\n\n"
-    
-    if "combined" in chart_links:
-        report_md += "## 📊 Unified Latency Comparison (TTFT vs. TTLT)\n"
-        report_md += f"![Unified Latency Comparison]({chart_links['combined']})\n\n"
-        report_md += "---\n\n"
-    
-    for s in scenarios:
-        s_name = s["name"]
-        runs = results[s_name]
-        complexity = s.get("complexity_level", "Unknown")
+    # Now, build report.md structure using templates
+    git_root = get_git_root()
+    if test_id == "verify":
+        report_title = "GE Benchmarking Testing Report: Verification Run"
+    else:
+        report_title = f"GE Benchmarking Testing Report: Run {test_id}"
         
-        report_md += f"## Scenario: {s_name}\n"
-        report_md += f"*   **Complexity Profile**: `{complexity}`\n\n"
-        report_md += "| Run ID | API Used | status_code | TTFT (s) | TTLT (s) | Speed (char/s) | Trace & Screenshot |\n"
-        report_md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
-        
+    # Read templates
+    config_dir = os.path.join(git_root, "tools/test_harness/config")
+    try:
+        with open(os.path.join(config_dir, "report_template.md"), "r") as f:
+            report_template = f.read()
+        with open(os.path.join(config_dir, "scenario_template.md"), "r") as f:
+            scenario_template = f.read()
+        with open(os.path.join(config_dir, "screenshot_template.md"), "r") as f:
+            screenshot_template = f.read()
+    except Exception as e:
+        print(f"Error loading report templates from {config_dir}: {e}")
+        raise e
+
+    readme_abs = os.path.abspath(os.path.join(git_root, "tools/test_harness/README.md"))
+    readme_rel = os.path.relpath(readme_abs, run_dir)
+
+    # Calculate High-Level Averages
+    api_ttfts = []
+    api_ttlts = []
+    ui_ttfts = []
+    ui_ttlts = []
+    for s_name, runs in results.items():
         for r in runs:
             if r.get("error"):
-                report_md += f"| {r['run_id']} | {r['api']} | {r['status_code']} | ERROR | ERROR | 0.0 | {r['error'][:40]} |\n"
+                continue
+            if "ui" in r["api"].lower():
+                if r.get("ttft") is not None:
+                    ui_ttfts.append(r["ttft"])
+                if r.get("ttlt") is not None:
+                    ui_ttlts.append(r["ttlt"])
             else:
-                ttft_str = f"{r['ttft']:.3f}" if r.get('ttft') is not None else "N/A"
-                ttlt_str = f"{r['ttlt']:.3f}" if r.get('ttlt') is not None else "N/A"
-                speed_str = f"{r['generation_speed']:.1f}"
-                
-                trace_url = f"https://console.cloud.google.com/traces/list?project={project_id}&tid={r['trace_id']}" if r.get('trace_id') and r['trace_id'] != "N/A" else ""
-                trace_link = f"[Trace Link]({trace_url})" if trace_url else "N/A"
-                
-                if r.get("screenshot_path"):
-                    trace_link += f" \\| [Screenshot]({r['screenshot_path']})"
+                if r.get("ttft") is not None:
+                    api_ttfts.append(r["ttft"])
+                if r.get("ttlt") is not None:
+                    api_ttlts.append(r["ttlt"])
                     
-                report_md += f"| {r['run_id']} | {r['api']} | {r['status_code']} | {ttft_str} | {ttlt_str} | {speed_str} | {trace_link} |\n"
-                
-        # Append Stats details
-        s_stats = results_json["scenarios"][s_name]["aggregated_stats"]
-        runs_data = results_json["scenarios"][s_name]["runs"]
-        
-        # Get raw stats
-        ttft_list = [r["ttft"] for r in runs_data if not r.get("error") and r.get("ttft") is not None]
-        ttlt_list = [r["ttlt"] for r in runs_data if not r.get("error") and r.get("ttlt") is not None]
-        speed_list = [r["generation_speed"] for r in runs_data if not r.get("error") and r.get("generation_speed", 0) > 0]
-        
-        ttft_min, ttft_p50, ttft_p90, ttft_p95, ttft_p99, ttft_max, ttft_avg = get_stats(ttft_list)
-        ttlt_min, ttlt_p50, ttlt_p90, ttlt_p95, ttlt_p99, ttlt_max, ttlt_avg = get_stats(ttlt_list)
-        speed_min, speed_p50, speed_p90, speed_p95, speed_p99, speed_max, speed_avg = get_stats(speed_list)
-        
-        def fmt(val, unit="s"):
-            return f"{val:.3f} {unit}" if val is not None else "N/A"
-            
-        report_md += f"\n**Statistics for {s_name}:**\n"
-        report_md += f"* **Success Rate**: {s_stats['success_rate_percent']:.1f}%\n"
-        report_md += f"* **TTFT**: Min = {fmt(ttft_min)}, P50 = {fmt(ttft_p50)}, P90 = {fmt(ttft_p90)}, P95 = {fmt(ttft_p95)}, P99 = {fmt(ttft_p99)}, Max = {fmt(ttft_max)}, Avg = {fmt(ttft_avg)}\n"
-        report_md += f"* **TTLT**: Min = {fmt(ttlt_min)}, P50 = {fmt(ttlt_p50)}, P90 = {fmt(ttlt_p90)}, P95 = {fmt(ttlt_p95)}, P99 = {fmt(ttlt_p99)}, Max = {fmt(ttlt_max)}, Avg = {fmt(ttlt_avg)}\n"
-        report_md += f"* **Speed**: Min = {fmt(speed_min, 'char/s')}, P50 = {fmt(speed_p50, 'char/s')}, P90 = {fmt(speed_p90, 'char/s')}, P95 = {fmt(speed_p95, 'char/s')}, P99 = {fmt(speed_p99, 'char/s')}, Max = {fmt(speed_max, 'char/s')}, Avg = {fmt(speed_avg, 'char/s')}\n\n"
-        
-        # Append visual charts if generated
-        if s_name in chart_links:
-            runs_chart = chart_links[s_name].get("runs_chart")
-            hist_chart = chart_links[s_name].get("hist_chart")
-            if runs_chart or hist_chart:
-                report_md += "### 📈 Latency Visualizations\n\n"
-                if runs_chart:
-                    report_md += f"**Latency Across Runs (TTFT vs TTLT)**:\n\n![Latency Across Runs]({runs_chart})\n\n"
-                if hist_chart:
-                    report_md += f"**Latency Bin Distribution**:\n\n![Latency Distribution]({hist_chart})\n\n"
+    avg_api_ttft_val = sum(api_ttfts) / len(api_ttfts) if api_ttfts else None
+    avg_api_ttlt_val = sum(api_ttlts) / len(api_ttlts) if api_ttlts else None
+    avg_ui_ttft_val = sum(ui_ttfts) / len(ui_ttfts) if ui_ttfts else None
+    avg_ui_ttlt_val = sum(ui_ttlts) / len(ui_ttlts) if ui_ttlts else None
 
-    # Add UI Screenshots stacked at the bottom of the markdown report
-    report_md += "## 🖼️ Web App UI Run Screenshots\n\n"
-    has_ui = False
-    ui_scenario_name = next((name for name in results if "ui" in name.lower()), None)
-    if ui_scenario_name:
-        for r in results[ui_scenario_name]:
-            if r.get("screenshot_path"):
-                has_ui = True
-                report_md += f"### UI Run {r['run_id']}\n"
-                report_md += f"![UI Run {r['run_id']}]({r['screenshot_path']})\n\n"
+    def fmt_avg(val):
+        return f"`{val:.3f} s`" if val is not None else "`N/A`"
+
+    # Group scenarios by their base name (combining models and pathways)
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for s in scenarios:
+        base_name = get_scenario_base_name(s["name"])
+        grouped[base_name].append(s)
+
+    # Helper to detect connectors
+    def detect_connectors(scenario_name):
+        connectors = []
+        name_upper = scenario_name.upper()
+        if "GDRIVE" in name_upper or "GOOGLE DRIVE" in name_upper or "HR EMPLOYEE HANDBOOK" in name_upper:
+            connectors.append("Google Drive")
+        if "CONFLUENCE" in name_upper:
+            connectors.append("Confluence")
+        if "JIRA" in name_upper:
+            connectors.append("Jira")
+        if "LUMAPPS" in name_upper or "GCS" in name_upper:
+            connectors.append("LumApps (GCS)")
+        if "3-WAY" in name_upper:
+            connectors.extend(["LumApps (GCS)", "Confluence", "Jira"])
+        if not connectors:
+            connectors.append("Default Search Index")
+        return list(set(connectors))
+
+    scenarios_section = ""
+    for base_name, group in grouped.items():
+        first_s = group[0]
+        s_query = first_s.get("query", query)
+        complexity = first_s.get("complexity_level", "Unknown")
+        expected_connectors = detect_connectors(base_name)
+        
+        flash_api = next((s for s in group if "3.5 flash" in s["name"].lower() and "ui" not in s["api"].lower()), None)
+        flash_ui = next((s for s in group if "3.5 flash" in s["name"].lower() and "ui" in s["api"].lower()), None)
+        pro_api = next((s for s in group if "3.1 pro" in s["name"].lower() and "ui" not in s["api"].lower()), None)
+        pro_ui = next((s for s in group if "3.1 pro" in s["name"].lower() and "ui" in s["api"].lower()), None)
+        
+        def get_model_stats(s_dict):
+            if not s_dict:
+                return "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+            s_name = s_dict["name"]
+            runs_data = results_json["scenarios"][s_name]["runs"]
+            ttft_list = [r["ttft"] for r in runs_data if not r.get("error") and r.get("ttft") is not None]
+            ttlt_list = [r["ttlt"] for r in runs_data if not r.get("error") and r.get("ttlt") is not None]
+            ttft_min, ttft_p50, _, ttft_p95, _, ttft_max, _ = get_stats(ttft_list)
+            ttlt_min, ttlt_p50, _, ttlt_p95, _, ttlt_max, _ = get_stats(ttlt_list)
+            
+            def fmt_val(val):
+                return f"{val:.3f} s" if val is not None else "N/A"
+            return fmt_val(ttft_min), fmt_val(ttft_p50), fmt_val(ttft_p95), fmt_val(ttft_max), fmt_val(ttlt_min), fmt_val(ttlt_p50), fmt_val(ttlt_p95), fmt_val(ttlt_max)
+
+        f_api_ttft_min, f_api_ttft_p50, f_api_ttft_p95, f_api_ttft_max, f_api_ttlt_min, f_api_ttlt_p50, f_api_ttlt_p95, f_api_ttlt_max = get_model_stats(flash_api)
+        f_ui_ttft_min, f_ui_ttft_p50, f_ui_ttft_p95, f_ui_ttft_max, f_ui_ttlt_min, f_ui_ttlt_p50, f_ui_ttlt_p95, f_ui_ttlt_max = get_model_stats(flash_ui)
+        p_api_ttft_min, p_api_ttft_p50, p_api_ttft_p95, p_api_ttft_max, p_api_ttlt_min, p_api_ttlt_p50, p_api_ttlt_p95, p_api_ttlt_max = get_model_stats(pro_api)
+        p_ui_ttft_min, p_ui_ttft_p50, p_ui_ttft_p95, p_ui_ttft_max, p_ui_ttlt_min, p_ui_ttlt_p50, p_ui_ttlt_p95, p_ui_ttlt_max = get_model_stats(pro_ui)
+        
+        # Build Detailed Invocations Rows
+        run_rows = ""
+        for i in range(1, iterations + 1):
+            def get_run_row(s_dict, model_name, pathway_name, run_idx, is_first_row_for_run=False):
+                run_cell = f"**{run_idx}**" if is_first_row_for_run else ""
+                if not s_dict:
+                    return ""
+                s_name = s_dict["name"]
+                runs_data = results_json["scenarios"][s_name]["runs"]
+                run_data = next((r for r in runs_data if r["run_id"] == run_idx), None)
+                if not run_data:
+                    return ""
                 
+                if run_data.get("error"):
+                    err_msg = run_data["error"].replace("\n", " ")[:60]
+                    return f"| {run_cell} | {model_name} | {pathway_name} | {run_data['status_code']} | ERROR | ERROR | 0.0 | {err_msg} | N/A |\n"
+                
+                ttft_str = f"{run_data['ttft']:.3f}" if run_data.get('ttft') is not None else "N/A"
+                ttlt_str = f"{run_data['ttlt']:.3f}" if run_data.get('ttlt') is not None else "N/A"
+                speed_str = f"{run_data['generation_speed']:.1f}"
+                
+                if "ui" in s_dict["api"].lower():
+                    screenshot_link = f"[Screenshot]({run_data['screenshot_path']})" if run_data.get('screenshot_path') else "N/A"
+                    return f"| {run_cell} | {model_name} | UI (Preview) | {run_data['status_code']} | {ttft_str} | {ttlt_str} | {speed_str} | {screenshot_link} | N/A |\n"
+                else:
+                    trace_id_str = f"`{run_data['trace_id']}`" if run_data.get('trace_id') and run_data['trace_id'] != "N/A" else "N/A"
+                    span_id_str = f"`{run_data['span_id']}`" if run_data.get('span_id') and run_data['span_id'] != "N/A" else "N/A"
+                    return f"| {run_cell} | {model_name} | API (Stream) | {run_data['status_code']} | {ttft_str} | {ttlt_str} | {speed_str} | {trace_id_str} | {span_id_str} |\n"
+
+            run_rows += get_run_row(flash_api, "Gemini 3.5 Flash", "API (Stream)", i, is_first_row_for_run=True)
+            run_rows += get_run_row(flash_ui, "Gemini 3.5 Flash", "UI (Preview)", i, is_first_row_for_run=False)
+            run_rows += get_run_row(pro_api, "Gemini 3.1 Pro", "API (Stream)", i, is_first_row_for_run=False)
+            run_rows += get_run_row(pro_ui, "Gemini 3.1 Pro", "UI (Preview)", i, is_first_row_for_run=False)
+
+        # Format scenario template
+        scenario_md = scenario_template.format(
+            scenario_name=base_name,
+            complexity_level=f"`{complexity}` (Expected Connectors: {', '.join(expected_connectors)})",
+            project_id=project_id,
+            f_api_ttft_min=f_api_ttft_min, f_api_ttft_p50=f_api_ttft_p50, f_api_ttft_p95=f_api_ttft_p95, f_api_ttft_max=f_api_ttft_max,
+            f_api_ttlt_min=f_api_ttlt_min, f_api_ttlt_p50=f_api_ttlt_p50, f_api_ttlt_p95=f_api_ttlt_p95, f_api_ttlt_max=f_api_ttlt_max,
+            f_ui_ttft_min=f_ui_ttft_min, f_ui_ttft_p50=f_ui_ttft_p50, f_ui_ttft_p95=f_ui_ttft_p95, f_ui_ttft_max=f_ui_ttft_max,
+            f_ui_ttlt_min=f_ui_ttlt_min, f_ui_ttlt_p50=f_ui_ttlt_p50, f_ui_ttlt_p95=f_ui_ttlt_p95, f_ui_ttlt_max=f_ui_ttlt_max,
+            p_api_ttft_min=p_api_ttft_min, p_api_ttft_p50=p_api_ttft_p50, p_api_ttft_p95=p_api_ttft_p95, p_api_ttft_max=p_api_ttft_max,
+            p_api_ttlt_min=p_api_ttlt_min, p_api_ttlt_p50=p_api_ttlt_p50, p_api_ttlt_p95=p_api_ttlt_p95, p_api_ttlt_max=p_api_ttlt_max,
+            p_ui_ttft_min=p_ui_ttft_min, p_ui_ttft_p50=p_ui_ttft_p50, p_ui_ttft_p95=p_ui_ttft_p95, p_ui_ttft_max=p_ui_ttft_max,
+            p_ui_ttlt_min=p_ui_ttlt_min, p_ui_ttlt_p50=p_ui_ttlt_p50, p_ui_ttlt_p95=p_ui_ttlt_p95, p_ui_ttlt_max=p_ui_ttlt_max,
+            run_rows=run_rows
+        )
+        scenarios_section += scenario_md
+
+    # Build Screenshots Section
+    screenshots_section = "## 🖼️ Web App UI Run Screenshots\n\n"
+    has_ui = False
+    for s_name, runs in results.items():
+        if "ui" in s_name.lower():
+            for r in runs:
+                if r.get("screenshot_path"):
+                    has_ui = True
+                    screenshot_abs = os.path.abspath(os.path.join(run_dir, r['screenshot_path']))
+                    screenshot_git_rel = os.path.relpath(screenshot_abs, git_root)
+                    screenshots_section += screenshot_template.format(
+                        run_id=r['run_id'],
+                        scenario_name=s_name,
+                        screenshot_path=r['screenshot_path'],
+                        screenshot_path_git_rel=screenshot_git_rel
+                    )
     if not has_ui:
-        report_md += "*No UI screenshots captured for this run.*\n"
+        screenshots_section += "*No UI screenshots captured for this run.\n\n"
+
+    chart_path = chart_links.get('combined', '')
+    
+    # Format the master report
+    final_report = report_template.format(
+        report_title=report_title,
+        timestamp=results_json['timestamp'],
+        model_used=model_used,
+        manifest_rel=copied_manifest_git_rel,
+        readme_rel=readme_rel,
+        run_dir=run_dir,
+        manifest_filename=copied_manifest_filename,
+        avg_api_ttft=fmt_avg(avg_api_ttft_val),
+        avg_api_ttlt=fmt_avg(avg_api_ttlt_val),
+        avg_ui_ttft=fmt_avg(avg_ui_ttft_val),
+        avg_ui_ttlt=fmt_avg(avg_ui_ttlt_val),
+        chart_path=chart_path,
+        scenarios_section=scenarios_section,
+        screenshots_section=screenshots_section,
+        max_concurrency=max_concurrency,
+        total_duration_s=total_duration_s,
+        duration_minutes=duration_minutes,
+        throughput_qpm=throughput_qpm
+    )
 
     with open(f"{run_dir}/report.md", "w") as mf:
-        mf.write(report_md)
-        
-    # Print Markdown output to stdout for the session log
-    print("\n=================== BENCHMARK REPORT ===================")
-    print(report_md)
-    print("========================================================")
-    print(f"All runs artifacts written successfully to: {run_dir}")
+        mf.write(final_report)
+
+
+    # Print a beautiful, concise summary with a git-relative hyperlink to the report.md file
+    report_abs = os.path.abspath(os.path.join(run_dir, "report.md"))
+    report_git_rel = os.path.relpath(report_abs, git_root)
+    
+    console = Console()
+    console.print()
+    
+    summary_text = (
+        f"[bold green]✔ All benchmarking scenarios executed successfully![/bold green]\n\n"
+        f"[bold white]Benchmarking Report:[/bold white]\n"
+        f"  [bold cyan]{report_git_rel}[/bold cyan]"
+    )
+    
+    console.print(Panel(
+        summary_text,
+        style="bold green",
+        border_style="green",
+        title="[bold yellow]BENCHMARK COMPLETE[/bold yellow]",
+        title_align="center",
+        padding=(1, 2)
+    ))
+    console.print()
 
 def main():
-    parser = argparse.ArgumentParser(description="Yahoo Gemini Enterprise Latency Auditor")
+    parser = argparse.ArgumentParser(description="Yahoo Gemini Enterprise Latency Benchmarking Testing Tool")
     parser.add_argument(
         "--manifest",
-        default="manifests/manifest_multi_query_template.json",
+        default="config/manifest_multi_query_template.json",
         help="Path to the JSON configuration manifest"
     )
     parser.add_argument(
+        "--cdp",
         "--cdp-url",
+        dest="cdp_url",
         default=None,
-        help="Optional Chrome DevTools Protocol URL (e.g. http://localhost:9222) to reuse existing session"
+        help="Optional Chrome DevTools Protocol URL (e.g. http://localhost:9223) to reuse existing session"
     )
     args = parser.parse_args()
     asyncio.run(main_async(args.manifest, args.cdp_url))

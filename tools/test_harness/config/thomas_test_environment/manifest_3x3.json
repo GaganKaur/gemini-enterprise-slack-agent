@@ -1,0 +1,181 @@
+{
+  "manifest_version": "1.0.0",
+  "test_id": "3x3_run",
+  "model_used": "Gemini 3.5 Flash & Gemini 3.1 Pro Dual-Model Run",
+  "description": "3 Queries x 2 Models x 2 Pathways Mid-Scale Latency Benchmark - Thomas environment",
+  "project_id": "genai-alpha-422116",
+  "engine_id": "yahoo_1780365163254",
+  "query": "what is the company PTO policy?",
+  "iterations": 3,
+  "max_concurrent_calls": 2,
+  "scenarios": [
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Confluence + Jira - VPN Issues - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q3. Confluence + Jira - VPN Issues - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q3. Confluence + Jira - VPN Issues - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q3. Confluence + Jira - VPN Issues - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    }
+  ],
+  "metrics_collection": {
+    "generation_speed": true,
+    "browser_console_logs": true,
+    "reliability_tracking": true,
+    "output_content_verification": true
+  }
+}

@@ -1,0 +1,505 @@
+{
+  "manifest_version": "1.0.0",
+  "test_id": "002",
+  "description": "Multi-connector comprehensive query benchmark - Thomas environment",
+  "project_id": "genai-alpha-422116",
+  "engine_id": "yahoo_1780365163254",
+  "query": "what is the company PTO policy?",
+  "iterations": 5,
+  "max_concurrent_calls": 3,
+  "scenarios": [
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q1. GDrive - PTO Rollover - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the company policy for rollover of unused PTO days?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q2. Confluence - VPN Configuration - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "How do I configure my VPN connection according to the IT setup guide?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Jira - Broken Keyboard Status - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the status of the Jira ticket regarding broken keyboard replacements?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Jira - Broken Keyboard Status - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the status of the Jira ticket regarding broken keyboard replacements?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Jira - Broken Keyboard Status - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the status of the Jira ticket regarding broken keyboard replacements?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q3. Jira - Broken Keyboard Status - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the status of the Jira ticket regarding broken keyboard replacements?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q4. LumApps GCS - Rollout Latency - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the target latency specified in the Gemini Enterprise rollout guidelines?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q4. LumApps GCS - Rollout Latency - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "What is the target latency specified in the Gemini Enterprise rollout guidelines?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q4. LumApps GCS - Rollout Latency - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the target latency specified in the Gemini Enterprise rollout guidelines?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q4. LumApps GCS - Rollout Latency - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "What is the target latency specified in the Gemini Enterprise rollout guidelines?",
+      "complexity_level": "Level 2: Single-Connector RAG"
+    },
+    {
+      "name": "Q5. Confluence + Jira - VPN Issues - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q5. Confluence + Jira - VPN Issues - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q5. Confluence + Jira - VPN Issues - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q5. Confluence + Jira - VPN Issues - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "According to Confluence, what are the VPN setup instructions, and is there an active Jira ticket for VPN access denied issues?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q6. GDrive + Confluence - Laptop Upgrade Cycle - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "I need a new laptop. Under the Confluence IT policy, what is the upgrade cycle, and is there any mention of travel/office equipment allowances in the HR Employee Handbook?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q6. GDrive + Confluence - Laptop Upgrade Cycle - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "I need a new laptop. Under the Confluence IT policy, what is the upgrade cycle, and is there any mention of travel/office equipment allowances in the HR Employee Handbook?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q6. GDrive + Confluence - Laptop Upgrade Cycle - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "I need a new laptop. Under the Confluence IT policy, what is the upgrade cycle, and is there any mention of travel/office equipment allowances in the HR Employee Handbook?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q6. GDrive + Confluence - Laptop Upgrade Cycle - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "I need a new laptop. Under the Confluence IT policy, what is the upgrade cycle, and is there any mention of travel/office equipment allowances in the HR Employee Handbook?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q7. LumApps + Jira - Dev Workspace Tools - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "According to the LumApps Gemini rollout guidelines, what are employees required to do, and is there a Jira ticket related to setting up developer workspace tools like Slack?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q7. LumApps + Jira - Dev Workspace Tools - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "According to the LumApps Gemini rollout guidelines, what are employees required to do, and is there a Jira ticket related to setting up developer workspace tools like Slack?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q7. LumApps + Jira - Dev Workspace Tools - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "According to the LumApps Gemini rollout guidelines, what are employees required to do, and is there a Jira ticket related to setting up developer workspace tools like Slack?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q7. LumApps + Jira - Dev Workspace Tools - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "According to the LumApps Gemini rollout guidelines, what are employees required to do, and is there a Jira ticket related to setting up developer workspace tools like Slack?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (2 Connectors)"
+    },
+    {
+      "name": "Q8. GDrive + Confluence + Jira - Remote Work - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "I am setting up my remote home office. What does the Employee Handbook say about flexible remote working hours, how do I set up my remote VPN access from Confluence, and is there any active Jira ticket tracking VPN connection errors?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q8. GDrive + Confluence + Jira - Remote Work - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "I am setting up my remote home office. What does the Employee Handbook say about flexible remote working hours, how do I set up my remote VPN access from Confluence, and is there any active Jira ticket tracking VPN connection errors?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q8. GDrive + Confluence + Jira - Remote Work - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "I am setting up my remote home office. What does the Employee Handbook say about flexible remote working hours, how do I set up my remote VPN access from Confluence, and is there any active Jira ticket tracking VPN connection errors?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q8. GDrive + Confluence + Jira - Remote Work - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "I am setting up my remote home office. What does the Employee Handbook say about flexible remote working hours, how do I set up my remote VPN access from Confluence, and is there any active Jira ticket tracking VPN connection errors?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q9. 3-Way IT Checklist - Gemini 3.5 Flash (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "Assemble an IT support checklist for Gemini Enterprise: What is the target latency from the LumApps rollout guidelines, what laptop replacement rules are defined in the Confluence IT policy, and are there any active keyboard or workspace Jira tickets blocking developers?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q9. 3-Way IT Checklist - Gemini 3.5 Flash (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.5 Flash",
+      "query": "Assemble an IT support checklist for Gemini Enterprise: What is the target latency from the LumApps rollout guidelines, what laptop replacement rules are defined in the Confluence IT policy, and are there any active keyboard or workspace Jira tickets blocking developers?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q9. 3-Way IT Checklist - Gemini 3.1 Pro (Stream)",
+      "api": "streamAssist",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "Assemble an IT support checklist for Gemini Enterprise: What is the target latency from the LumApps rollout guidelines, what laptop replacement rules are defined in the Confluence IT policy, and are there any active keyboard or workspace Jira tickets blocking developers?",
+      "payload": {
+        "assistSkippingMode": "REQUEST_ASSIST",
+        "agentsSpec": {
+          "agentSpecs": [
+            {
+              "agentId": "core_assistant"
+            }
+          ]
+        },
+        "toolsSpec": {
+          "vertexAiSearchSpec": {}
+        }
+      },
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    },
+    {
+      "name": "Q9. 3-Way IT Checklist - Gemini 3.1 Pro (UI)",
+      "api": "ui",
+      "model_used": "Gemini 3.1 Pro",
+      "query": "Assemble an IT support checklist for Gemini Enterprise: What is the target latency from the LumApps rollout guidelines, what laptop replacement rules are defined in the Confluence IT policy, and are there any active keyboard or workspace Jira tickets blocking developers?",
+      "complexity_level": "Level 3: Multi-Connector Federated RAG (3 Connectors)"
+    }
+  ],
+  "metrics_collection": {
+    "generation_speed": true,
+    "browser_console_logs": true,
+    "reliability_tracking": true,
+    "output_content_verification": true
+  },
+  "model_used": "Gemini 3.5 Flash & Gemini 3.1 Pro Dual-Model Run"
+}

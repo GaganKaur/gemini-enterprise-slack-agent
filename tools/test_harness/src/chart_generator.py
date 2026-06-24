@@ -120,13 +120,29 @@ def generate_combined_latency_comparison(results_path, charts_dir):
     if not scenarios:
         return
         
-    labels = []
-    ttft_avgs = []
-    ttlt_avgs = []
-    ttft_errs = []
-    ttlt_errs = []
+    def parse_scenario_components(s_name):
+        # Format: "Q1. GDrive - PTO Rollover - Gemini 3.5 Flash (Stream)"
+        pathway = "API" if "ui" not in s_name.lower() else "UI"
+        
+        model = "3.5 Flash"
+        if "3.1 Pro" in s_name or "3.1-pro" in s_name.lower():
+            model = "3.1 Pro"
+        elif "3.5 Flash" in s_name or "3.5-flash" in s_name.lower():
+            model = "3.5 Flash"
+            
+        base_query = s_name.split(" - Gemini")[0]
+        return base_query, model, pathway
+
+    unique_queries = []
+    query_data = {} # base_query -> { (model, pathway) -> (ttft_avg, ttlt_avg, ttft_err, ttlt_err) }
     
     for s_name, sc in scenarios.items():
+        base_query, model, pathway = parse_scenario_components(s_name)
+        if base_query not in unique_queries:
+            unique_queries.append(base_query)
+        if base_query not in query_data:
+            query_data[base_query] = {}
+            
         stats = sc["aggregated_stats"]
         ttft_avg = stats.get("ttft_avg_s")
         ttlt_avg = stats.get("ttlt_avg_s")
@@ -134,54 +150,115 @@ def generate_combined_latency_comparison(results_path, charts_dir):
         runs = sc.get("runs", [])
         ttfts = [r["ttft"] if r.get("ttft") is not None else r.get("ttft_s") for r in runs]
         ttlts = [r["ttlt"] if r.get("ttlt") is not None else r.get("ttlt_s") for r in runs]
-        
         ttfts = [v for v in ttfts if v is not None]
         ttlts = [v for v in ttlts if v is not None]
         
-        # Simplify label text to prevent visual clutter
-        short_label = s_name.replace("Scenario: ", "").replace("Assistant", "Asst").replace("14356008107232711696", "14356")
-        labels.append(short_label)
+        ttft_err = (ttft_avg - min(ttfts), max(ttfts) - ttft_avg) if (ttfts and ttft_avg is not None) else (0.0, 0.0)
+        ttlt_err = (ttlt_avg - min(ttlts), max(ttlts) - ttlt_avg) if (ttlts and ttlt_avg is not None) else (0.0, 0.0)
         
-        ttft_avgs.append(ttft_avg or 0.0)
-        ttlt_avgs.append(ttlt_avg or 0.0)
+        query_data[base_query][(model, pathway)] = (
+            ttft_avg or 0.0, 
+            ttlt_avg or 0.0,
+            ttft_err,
+            ttlt_err
+        )
         
-        if ttfts and ttft_avg is not None:
-            ttft_errs.append((ttft_avg - min(ttfts), max(ttfts) - ttft_avg))
-        else:
-            ttft_errs.append((0, 0))
-            
-        if ttlts and ttlt_avg is not None:
-            ttlt_errs.append((ttlt_avg - min(ttlts), max(ttlts) - ttlt_avg))
-        else:
-            ttlt_errs.append((0, 0))
-            
-    ttft_err = np.array(ttft_errs).T
-    ttlt_err = np.array(ttlt_errs).T
+    x_positions = []
+    x_labels = []
     
-    x = np.arange(len(labels))
+    ttft_list = []
+    ttlt_list = []
+    ttft_err_list = []
+    ttlt_err_list = []
+    bar_hatches = []
+    query_centers = []
+    
+    categories = [
+        ("3.5 Flash", "API"),
+        ("3.1 Pro", "API"),
+        ("3.5 Flash", "UI"),
+        ("3.1 Pro", "UI")
+    ]
+    
+    current_x = 0.0
+    query_spacing = 2.5
+    category_spacing = 1.0
+    
+    for q_idx, base_query in enumerate(unique_queries):
+        start_x = current_x
+        for cat_idx, (model, pathway) in enumerate(categories):
+            pos_x = current_x
+            x_positions.append(pos_x)
+            
+            model_short = "Flash" if "Flash" in model else "Pro"
+            x_labels.append(f"{pathway}\n({model_short})")
+            
+            val_tuple = query_data[base_query].get((model, pathway))
+            if val_tuple:
+                ttft_avg, ttlt_avg, ttft_err, ttlt_err = val_tuple
+            else:
+                ttft_avg, ttlt_avg, ttft_err, ttlt_err = 0.0, 0.0, (0.0, 0.0), (0.0, 0.0)
+                
+            ttft_list.append(ttft_avg)
+            ttlt_list.append(ttlt_avg)
+            ttft_err_list.append(ttft_err)
+            ttlt_err_list.append(ttlt_err)
+            
+            hatch = 'xx' if "Flash" in model else '..'
+            bar_hatches.append(hatch)
+            
+            current_x += category_spacing
+            
+        end_x = current_x - category_spacing
+        query_centers.append((start_x + end_x) / 2)
+        current_x += query_spacing
+        
+    ttft_err_arr = np.array(ttft_err_list).T
+    ttlt_err_arr = np.array(ttlt_err_list).T
+    
+    fig_width = max(12, len(x_positions) * 1.0)
+    fig, ax = plt.subplots(figsize=(fig_width, 6.5))
+    
     width = 0.35
-    
-    # Scale width based on number of label scenarios
-    fig_width = max(10, len(labels) * 1.8)
-    fig, ax = plt.subplots(figsize=(fig_width, 6))
-    
-    rects1 = ax.bar(x - width/2, ttft_avgs, width, yerr=ttft_err, label='TTFT (Time to First Token)', 
-                    color='#7bc0f7', edgecolor='#4588cc', capsize=4, error_kw={'ecolor': '#444', 'elinewidth': 1.2})
-    rects2 = ax.bar(x + width/2, ttlt_avgs, width, yerr=ttlt_err, label='TTLT (Time to Last Token)', 
-                    color='#305980', edgecolor='#1d3c5a', capsize=4, error_kw={'ecolor': '#444', 'elinewidth': 1.2})
-    
-    ax.set_ylabel('Latency (seconds)', fontsize=11, fontweight='semibold')
+    rects1 = ax.bar(np.array(x_positions) - width/2, ttft_list, width, yerr=ttft_err_arr, 
+                    label='TTFT (Time to First Token)', color='#7bc0f7', edgecolor='#4588cc', 
+                    capsize=4, error_kw={'ecolor': '#444', 'elinewidth': 1.2})
+                    
+    rects2 = ax.bar(np.array(x_positions) + width/2, ttlt_list, width, yerr=ttlt_err_arr, 
+                    label='TTLT (Time to Last Token)', color='#305980', edgecolor='#1d3c5a', 
+                    capsize=4, error_kw={'ecolor': '#444', 'elinewidth': 1.2})
+                    
+    # Apply hatch patterns
+    for idx, (r1, r2) in enumerate(zip(rects1, rects2)):
+        hatch = bar_hatches[idx]
+        r1.set_hatch(hatch)
+        r2.set_hatch(hatch)
+        
+    ax.set_ylabel('Latency (seconds)', fontsize=11, fontweight='bold')
     ax.set_title('Unified Latency Performance Comparison (TTFT vs TTLT)\nacross all configured test scenarios', 
                  fontsize=13, fontweight='bold', pad=15)
-    ax.set_xticks(x)
     
-    rotation = 45 if len(labels) > 4 else 0
-    ha = 'right' if rotation > 0 else 'center'
-    ax.set_xticklabels(labels, fontsize=10, fontweight='semibold', rotation=rotation, ha=ha)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(x_labels, fontsize=9, fontweight='bold')
     
-    ax.legend(frameon=True, facecolor='white', edgecolor='#e0e0e0', fontsize=10)
+    # Add centered query group labels below the main labels
+    for q_idx, base_query in enumerate(unique_queries):
+        center_x = query_centers[q_idx]
+        ax.text(center_x, -0.15, base_query, ha='center', va='top', 
+                fontsize=10, fontweight='bold', color='#333333',
+                transform=ax.get_xaxis_transform())
+                
+    # Custom Legend showing Metrics (colors) and Models (hatches)
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#7bc0f7', edgecolor='#4588cc', label='TTFT (Time to First Token)'),
+        Patch(facecolor='#305980', edgecolor='#1d3c5a', label='TTLT (Time to Last Token)'),
+        Patch(facecolor='#e0e0e0', edgecolor='#888888', hatch='xx', label='Gemini 3.5 Flash (Cross Hatch)'),
+        Patch(facecolor='#e0e0e0', edgecolor='#888888', hatch='..', label='Gemini 3.1 Pro (Dotted)')
+    ]
+    ax.legend(handles=legend_elements, frameon=True, facecolor='white', edgecolor='#e0e0e0', fontsize=10, loc='upper left')
     
-    max_val = max(ttlt_avgs) if ttlt_avgs else 0.0
+    max_val = max(ttlt_list) if ttlt_list else 0.0
     ax.set_ylim(0, max_val + max(5, max_val * 0.2))
     
     def autolabel(rects):
@@ -192,12 +269,14 @@ def generate_combined_latency_comparison(results_path, charts_dir):
                             xy=(rect.get_x() + rect.get_width() / 2, height),
                             xytext=(0, 2),
                             textcoords="offset points",
-                            ha='center', va='bottom', fontsize=9, fontweight='semibold')
+                            ha='center', va='bottom', fontsize=8, fontweight='bold')
                             
     autolabel(rects1)
     autolabel(rects2)
     
     plt.tight_layout()
+    fig.subplots_adjust(bottom=0.22) # Leave space for the centered query labels
+    
     out_path = os.path.join(charts_dir, "combined_latency_comparison.png")
     plt.savefig(out_path, dpi=150)
     plt.close()
