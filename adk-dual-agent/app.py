@@ -211,7 +211,7 @@ def handle_app_mention_events(ack, event, say, client):
     process_request(event, say, client)
 
 # --- RUN ---
-def run_flask(): flask_app.run(host='127.0.0.1', port=5000)
+def run_flask(): flask_app.run(host='0.0.0.0', port=8080)
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
