@@ -1,0 +1,11 @@
+# Ignore local test runs and screenshots
+runs/
+reproduction_kit/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+scratch/
+
+# Ignore local/personal test configurations
+config/thomas_test_environment/

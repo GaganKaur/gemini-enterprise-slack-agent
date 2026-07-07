@@ -9,6 +9,7 @@ google-auth
 flask
 slack_bolt
 google-auth-oauthlib
+httpx
 
 
 

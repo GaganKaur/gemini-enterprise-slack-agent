@@ -1,7 +1,7 @@
 import os
+import json
+import httpx
 from google.adk.tools.tool_context import ToolContext
-from google.api_core.client_options import ClientOptions
-from google.cloud import discoveryengine_v1alpha as discoveryengine
 
 # Configuration
 PROJECT = os.environ.get("GCP_PROJECT_ID")
@@ -40,60 +40,114 @@ def call_agentspace_search_api(query: str, tool_context: ToolContext) -> str:
         print(f"[DEBUG] ERROR: No credentials found in cache for {slack_user_id}")
         return "System Error: Credentials not found. Please log in again."
 
-    # 3. SETUP CLIENT 
-    client_options = ClientOptions(
-        api_endpoint=f"{LOCATION}-discoveryengine.googleapis.com" if LOCATION != "global" else None,
-        quota_project_id=PROJECT  
+    # Make sure token is valid
+    if not user_creds.valid:
+        from google.auth.transport.requests import Request
+        try:
+            user_creds.refresh(Request())
+        except Exception as refresh_err:
+            print(f"[DEBUG] Failed to refresh credentials: {refresh_err}")
+            return "System Error: Session expired. Please log in again."
+
+    # 3. SETUP STREAMING ENDPOINT URL & HEADERS
+    url = (
+        f"https://discoveryengine.googleapis.com/v1alpha/"
+        f"projects/{PROJECT}/locations/{LOCATION}/collections/default_collection/"
+        f"engines/{ENGINE_ID}/assistants/default_assistant:streamAssist"
     )
+    
+    headers = {
+        "Authorization": f"Bearer {user_creds.token}",
+        "Content-Type": "application/json",
+        "X-Goog-User-Project": PROJECT
+    }
+
+    payload = {
+        "query": {
+            "text": query
+        },
+        "assistSkippingMode": "REQUEST_ASSIST"
+    }
+
+    full_answer_text = ""
+    citations = []
+
+    print(f"[DEBUG] Querying streaming RAG API: {url}")
 
     try:
-        client = discoveryengine.ConversationalSearchServiceClient(
-            credentials=user_creds,
-            client_options=client_options
-        )
+        # 4. EXECUTE STREAMING CALL TO PREVENT GFE TIMEOUT
+        with httpx.Client(timeout=60.0) as http_client:
+            with http_client.stream("POST", url, json=payload, headers=headers) as response:
+                if response.status_code != 200:
+                    err_content = response.read().decode("utf-8")
+                    print(f"[DEBUG] API Error response: {err_content}")
+                    return f"System Error: RAG API returned HTTP {response.status_code}"
 
-        serving_config = (
-            f"projects/{PROJECT}/locations/{LOCATION}/"
-            f"collections/default_collection/engines/{ENGINE_ID}/"
-            f"servingConfigs/default_config"
-        )
-        
-        # 4. EXECUTE SEARCH
-        request = discoveryengine.AnswerQueryRequest(
-            serving_config=serving_config,
-            query=discoveryengine.Query(text=query),
-            answer_generation_spec=discoveryengine.AnswerQueryRequest.AnswerGenerationSpec(
-                include_citations=True,
-            ),
-            query_understanding_spec=discoveryengine.AnswerQueryRequest.QueryUnderstandingSpec(
-                query_rephraser_spec=discoveryengine.AnswerQueryRequest.QueryUnderstandingSpec.QueryRephraserSpec(
-                    disable=False
-                )
-            )
-        )
+                buffer = ""
+                brace_count = 0
+                in_object = False
 
-        response = client.answer_query(request=request)
-        answer_text = response.answer.answer_text
-        
+                for chunk in response.iter_bytes():
+                    if not chunk:
+                        continue
+
+                    segment = chunk.decode("utf-8", errors="ignore")
+                    for char in segment:
+                        if in_object:
+                            buffer += char
+
+                        if char == "{":
+                            if brace_count == 0:
+                                in_object = True
+                                buffer = "{"
+                            brace_count += 1
+                        elif char == "}":
+                            brace_count -= 1
+                            if brace_count == 0 and in_object:
+                                try:
+                                    obj = json.loads(buffer)
+                                    # Extract assistToken if present
+                                    assist_token = obj.get("assistToken")
+                                    if assist_token:
+                                        tool_context.state["latest_assist_token"] = assist_token
+                                    answer_obj = obj.get("answer", {})
+
+                                    # Extract plan details if emitted in stream
+                                    for reply in answer_obj.get("replies", []):
+                                        content_block = reply.get("groundedContent", {}).get("content", {})
+                                        if content_block.get("role") == "model" and "text" in content_block:
+                                            print(f"[PLAN CHUNK] {content_block['text']}", flush=True)
+
+                                    # Extract text output
+                                    if "answerText" in answer_obj:
+                                        full_answer_text += answer_obj["answerText"]
+                                    elif "replyText" in answer_obj.get("reply", {}):
+                                        text = answer_obj["reply"]["replyText"]
+                                        full_answer_text += text
+
+                                    # Extract source references
+                                    for step in answer_obj.get("steps", []):
+                                        for action in step.get("actions", []):
+                                            for source in action.get("sources", []):
+                                                title = source.get("title", "Document")
+                                                uri = source.get("uri", "")
+                                                if uri and (title, uri) not in citations:
+                                                    citations.append((title, uri))
+                                except Exception:
+                                    pass
+
+                                buffer = ""
+                                in_object = False
+
         # 5. FORMAT OUTPUT
-        citations = []
-        if response.answer.citations:
-            for citation in response.answer.citations:
-                for source in citation.sources:
-                    ref_index = int(source.reference_id)
-                    if ref_index < len(response.answer.references):
-                        ref = response.answer.references[ref_index]
-                        uri = ref.chunk_info.document_metadata.uri
-                        title = ref.chunk_info.document_metadata.title
-                        citations.append(f"- <{uri}|{title}>")
-        
-        unique_citations = sorted(list(set(citations)))
-        
-        if not answer_text:
+        if not full_answer_text:
             return "I searched the knowledge base but couldn't generate a summary."
 
-        final_output = f"{answer_text}\n\n*Sources:*\n" + "\n".join(unique_citations)
-        return final_output
+        if citations:
+            formatted_citations = "\n".join([f"- <{url}|{title}>" for title, url in citations])
+            return f"{full_answer_text}\n\n*Sources:*\n{formatted_citations}"
+
+        return full_answer_text
 
     except Exception as e:
         print(f"[DEBUG] CRITICAL API ERROR: {e}")

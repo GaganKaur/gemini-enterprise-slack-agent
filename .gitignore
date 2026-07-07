@@ -8,3 +8,12 @@ credentials.json
 venv/
 __pycache__/
 *.pyc
+
+# Local workspace history
+.bash_history_workspace*
+
+# Harness Documentation/Notes (local only)
+tools/test_harness/docs/assets/
+
+# Local scratch scripts
+tools/test_harness/scratch/
