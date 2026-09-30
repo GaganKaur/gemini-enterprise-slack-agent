@@ -151,8 +151,22 @@ def _resolve_to_clickable_url(ref: dict) -> Tuple[str, str]:
 
     return str(title), (uri if uri.startswith("http") else "")
 
+def _strip_recitation_metadata(obj):
+    """Recursively drops `citationMetadata` blocks from a StreamAssist response.
+
+    `citationMetadata` is the model's recitation check (web pages its output
+    resembles, e.g. random Reddit threads), not documents retrieved for the
+    answer. Real sources live in `textGroundingMetadata.references`.
+    """
+    if isinstance(obj, dict):
+        return {k: _strip_recitation_metadata(v) for k, v in obj.items() if k != "citationMetadata"}
+    if isinstance(obj, list):
+        return [_strip_recitation_metadata(v) for v in obj]
+    return obj
+
 def _parse_stream_assist_chunks(response_chunks) -> Tuple[str, str, list]:
     """Recursively crawls StreamAssist response chunks to extract text and clickable citations."""
+    response_chunks = _strip_recitation_metadata(response_chunks)
     if isinstance(response_chunks, dict): response_chunks = [response_chunks]
     accumulated_text = ""
     new_session_id = None
